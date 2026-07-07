@@ -1,0 +1,53 @@
+# Cache-Control 配置 (任务 13.2 - 需求 6.4, 6.5, 6.6)
+# 策略：
+# - data.json 低缓存（5分钟），确保数据更新及时生效
+# - 静态资源（CSS/JS/图片）长缓存（1天），带 cache busting
+# - HTML 文件短缓存（5分钟），确保更新及时
+# - 启用 HTTPS 强制（在 Cloudflare 控制台配置）
+
+# data.json - 低缓存，确保数据更新及时生效
+/data.json
+  Cache-Control: public, max-age=300, must-revalidate
+
+# HTML 文件 - 短缓存
+/*.html
+  Cache-Control: public, max-age=300, must-revalidate
+  X-Content-Type-Options: nosniff
+
+# CSS 文件 - 中等缓存
+/*.css
+  Cache-Control: public, max-age=86400
+
+# JavaScript 文件 - 中等缓存
+/*.js
+  Cache-Control: public, max-age=86400
+
+# JSON 文件（除 data.json 外）- 中等缓存
+/*.json
+  Cache-Control: public, max-age=86400
+
+# 图片文件 - 长缓存
+/*.png
+  Cache-Control: public, max-age=604800
+/*.jpg
+  Cache-Control: public, max-age=604800
+/*.jpeg
+  Cache-Control: public, max-age=604800
+/*.gif
+  Cache-Control: public, max-age=604800
+/*.svg
+  Cache-Control: public, max-age=604800
+/*.ico
+  Cache-Control: public, max-age=604800
+
+# 字体文件 - 长缓存
+/*.woff
+  Cache-Control: public, max-age=604800
+/*.woff2
+  Cache-Control: public, max-age=604800
+
+# 安全头
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

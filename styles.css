@@ -1,0 +1,838 @@
+/* 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f5f5f5;
+    overflow-x: hidden;
+}
+
+/* 主容器 */
+#app {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 头部样式 */
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.auth-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* 时间轴样式 */
+.timeline-section {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.timeline-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+    color: #667eea;
+}
+
+.timeline-selector {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* 时间轴容器 */
+.timeline {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+/* 时间轴项 */
+.timeline-item {
+    display: inline-block;
+}
+
+.timeline-item button {
+    padding: 12px 24px;
+    border: 2px solid #667eea;
+    background: white;
+    color: #667eea;
+    border-radius: 25px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Microsoft YaHei', sans-serif;
+}
+
+.timeline-item button:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.timeline-item button.active {
+    background: #667eea;
+    color: white;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.timeline-item.not-participated button {
+    border-color: #ccc;
+    color: #999;
+    background: #f9f9f9;
+}
+
+.timeline-item.not-participated button:hover {
+    background: #e0e0e0;
+    color: #666;
+}
+
+/* 未参与标记 */
+.not-participated-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    background: #ffc107;
+    color: #333;
+    font-size: 0.75rem;
+    border-radius: 10px;
+    font-weight: normal;
+}
+
+/* 关系图区域 */
+.graph-section {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.graph-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.graph-header h2 {
+    font-size: 1.5rem;
+    color: #667eea;
+}
+
+.graph-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.legend {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #ddd;
+}
+
+/* 关系筛选器 (任务 9.2) */
+.filter-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 15px;
+    background: #f8f9ff;
+    border: 1px solid #e0e4f5;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-label {
+    font-weight: 600;
+    color: #555;
+    margin-right: 4px;
+}
+
+.filter-btn {
+    padding: 4px 12px;
+    border: 1px solid #d0d4e5;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #555;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.filter-btn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.filter-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    color: #555;
+}
+
+.filter-check input {
+    cursor: pointer;
+}
+
+.filter-check .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.filter-check .dot.friend { background: #00C957; }
+.filter-check .dot.crush { background: #FF1493; }
+.filter-check .dot.lover { background: #FF0000; }
+.filter-check .dot.classmate { background: #87CEEB; }
+
+.graph-container {
+    width: 100%;
+    height: 600px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fafafa;
+    position: relative;
+}
+
+/* 编辑面板 */
+.edit-section {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    border-left: 4px solid #764ba2;
+}
+
+.edit-section h2 {
+    font-size: 1.5rem;
+    color: #764ba2;
+    margin-bottom: 20px;
+}
+
+.edit-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* 表单样式 */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-weight: 500;
+    color: #555;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-family: 'Microsoft YaHei', sans-serif;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* 按钮样式 */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Microsoft YaHei', sans-serif;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #5568d3;
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+}
+
+/* 按钮 active 状态 (任务 10.2) */
+.btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 帮助说明 */
+.help-section {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.help-section details {
+    cursor: pointer;
+}
+
+.help-section summary {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #667eea;
+    padding: 10px;
+    user-select: none;
+}
+
+.help-section summary:hover {
+    background: #f0f0f0;
+    border-radius: 5px;
+}
+
+.help-content {
+    padding: 15px 10px;
+    color: #555;
+}
+
+.help-content h3 {
+    margin-bottom: 10px;
+    color: #667eea;
+}
+
+.help-content ul {
+    list-style-position: inside;
+    line-height: 1.8;
+}
+
+/* 响应式设计 - 移动端 */
+@media (max-width: 768px) {
+    /* 主容器移动端优化 */
+    #app {
+        padding: 10px;
+    }
+
+    /* 头部区域移动端布局 */
+    .header {
+        flex-direction: column;
+        text-align: center;
+        gap: 15px;
+        padding: 20px 15px;
+    }
+
+    .header h1 {
+        font-size: 1.5rem;
+    }
+
+    /* 时间轴移动端垂直布局 */
+    .timeline-section {
+        padding: 20px 15px;
+    }
+
+    .timeline-section h2 {
+        font-size: 1.3rem;
+    }
+
+    .timeline-selector {
+        flex-direction: column;
+    }
+
+    .timeline {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .timeline-item {
+        width: 100%;
+    }
+
+    .timeline-item button {
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 1rem;
+        text-align: center;
+    }
+
+    /* 关系图区域移动端优化 */
+    .graph-section {
+        padding: 20px 15px;
+    }
+
+    .graph-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .graph-header h2 {
+        font-size: 1.3rem;
+    }
+
+    .graph-controls {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    /* 移动端关系图容器尺寸优化 */
+    .graph-container {
+        height: 400px;
+        min-height: 350px;
+    }
+
+    /* 图例移动端布局 */
+    .legend {
+        font-size: 0.8rem;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .legend-item {
+        font-size: 0.85rem;
+    }
+
+    /* 筛选器移动端布局 (任务 10.1) */
+    .filter-panel {
+        width: 100%;
+        padding: 10px;
+    }
+
+    .filter-group {
+        gap: 6px;
+    }
+
+    .filter-btn {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+
+    .filter-check {
+        font-size: 0.85rem;
+    }
+
+    /* 编辑面板移动端优化 */
+    .edit-section {
+        padding: 20px 15px;
+    }
+
+    .edit-section h2 {
+        font-size: 1.3rem;
+    }
+
+    .edit-panel {
+        gap: 15px;
+    }
+
+    /* 表单元素移动端优化 */
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px; /* 防止 iOS Safari 自动缩放 */
+        padding: 12px;
+    }
+
+    /* 按钮移动端优化 */
+    .btn {
+        width: 100%;
+        padding: 12px 20px;
+        font-size: 1rem;
+    }
+
+    /* 帮助说明移动端优化 */
+    .help-section {
+        padding: 15px;
+    }
+
+    .help-section summary {
+        font-size: 1rem;
+    }
+
+    .help-content {
+        font-size: 0.9rem;
+    }
+}
+
+/* 响应式设计 - 平板设备 (768px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    #app {
+        padding: 15px;
+    }
+
+    .header {
+        padding: 25px;
+    }
+
+    .header h1 {
+        font-size: 1.8rem;
+    }
+
+    .graph-container {
+        height: 500px;
+    }
+
+    .timeline-selector {
+        gap: 8px;
+    }
+
+    .timeline-item button {
+        padding: 10px 20px;
+        font-size: 0.95rem;
+    }
+}
+
+/* 响应式设计 - 大屏幕优化 (> 1400px) */
+@media (min-width: 1400px) {
+    #app {
+        max-width: 1600px;
+    }
+
+    .graph-container {
+        height: 700px;
+    }
+
+    .header h1 {
+        font-size: 2.2rem;
+    }
+}
+
+/* 加载动画 */
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+}
+
+.loading::after {
+    content: "加载中...";
+    font-size: 1.2rem;
+    color: #667eea;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* 提示消息 */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 25px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.toast.success {
+    border-left: 4px solid #28a745;
+}
+
+.toast.error {
+    border-left: 4px solid #dc3545;
+}
+
+.toast.info {
+    border-left: 4px solid #17a2b8;
+}
+
+/* 认证界面样式 (任务 7.2) */
+.auth-view {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.auth-view .mode-label {
+    font-size: 0.95rem;
+    color: white;
+}
+
+.auth-view .mode-label strong {
+    font-weight: 600;
+}
+
+/* 登录对话框样式 */
+.auth-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.auth-dialog {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 400px;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.auth-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 25px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.auth-dialog-header h3 {
+    margin: 0;
+    color: #667eea;
+    font-size: 1.4rem;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: #999;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.close-button:hover {
+    color: #333;
+}
+
+.auth-dialog-body {
+    padding: 25px;
+}
+
+.auth-dialog-body .form-group {
+    margin-bottom: 20px;
+}
+
+.auth-dialog-body .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #555;
+}
+
+.auth-dialog-body .form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-family: 'Microsoft YaHei', sans-serif;
+    transition: border-color 0.3s ease;
+}
+
+.auth-dialog-body .form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.auth-dialog-error {
+    padding: 12px;
+    background: #fee;
+    border: 1px solid #fcc;
+    border-radius: 5px;
+    color: #c33;
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+}
+
+.auth-dialog-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.auth-dialog-actions .btn {
+    padding: 10px 20px;
+}
+
+/* 响应式调整 - 移动端认证界面 */
+@media (max-width: 768px) {
+    .auth-dialog {
+        width: 95%;
+        margin: 10px;
+    }
+
+    .auth-dialog-header {
+        padding: 15px 20px;
+    }
+
+    .auth-dialog-header h3 {
+        font-size: 1.2rem;
+    }
+
+    .auth-dialog-body {
+        padding: 20px;
+    }
+
+    .auth-view {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    .auth-view .mode-label {
+        font-size: 0.85rem;
+    }
+}
