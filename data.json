@@ -292,11 +292,139 @@
       "note": ""
     },
     {
+      "id": "rel_056",
+      "period": "college_1",
+      "person1": "杨天",
+      "person2": "马奴海",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_057",
+      "period": "college_1",
+      "person1": "杨天",
+      "person2": "杨致远",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_058",
+      "period": "college_1",
+      "person1": "杨天",
+      "person2": "洛让",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_059",
+      "period": "college_1",
+      "person1": "马奴海",
+      "person2": "杨致远",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_060",
+      "period": "college_1",
+      "person1": "马奴海",
+      "person2": "洛让",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_061",
+      "period": "college_1",
+      "person1": "杨致远",
+      "person2": "洛让",
+      "type": "friend",
+      "note": ""
+    },
+    {
       "id": "rel_031",
       "period": "college_2_4",
       "person1": "王乐江",
       "person2": "王子文",
       "type": "lover",
+      "note": ""
+    },
+    {
+      "id": "rel_052",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "杨致远",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_053",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "洛让",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_054",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "马奴海",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_055",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "杨天",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_062",
+      "period": "college_2_4",
+      "person1": "杨天",
+      "person2": "马奴海",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_063",
+      "period": "college_2_4",
+      "person1": "杨天",
+      "person2": "杨致远",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_064",
+      "period": "college_2_4",
+      "person1": "杨天",
+      "person2": "洛让",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_065",
+      "period": "college_2_4",
+      "person1": "马奴海",
+      "person2": "杨致远",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_066",
+      "period": "college_2_4",
+      "person1": "马奴海",
+      "person2": "洛让",
+      "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_067",
+      "period": "college_2_4",
+      "person1": "杨致远",
+      "person2": "洛让",
+      "type": "friend",
       "note": ""
     },
     {
@@ -332,6 +460,54 @@
       "note": ""
     },
     {
+      "id": "rel_040",
+      "period": "college_1",
+      "person1": "孙齐齐",
+      "person2": "盛昱乾",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_041",
+      "period": "college_1",
+      "person1": "孙齐齐",
+      "person2": "普友乐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_042",
+      "period": "college_1",
+      "person1": "孙齐齐",
+      "person2": "王浩",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_043",
+      "period": "college_1",
+      "person1": "盛昱乾",
+      "person2": "普友乐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_044",
+      "period": "college_1",
+      "person1": "盛昱乾",
+      "person2": "王浩",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_045",
+      "period": "college_1",
+      "person1": "普友乐",
+      "person2": "王浩",
+      "type": "roommate",
+      "note": ""
+    },
+    {
       "id": "rel_036",
       "period": "college_2_4",
       "person1": "王乐江",
@@ -359,6 +535,54 @@
       "id": "rel_039",
       "period": "college_2_4",
       "person1": "王乐江",
+      "person2": "王浩",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_046",
+      "period": "college_2_4",
+      "person1": "孙齐齐",
+      "person2": "盛昱乾",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_047",
+      "period": "college_2_4",
+      "person1": "孙齐齐",
+      "person2": "普友乐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_048",
+      "period": "college_2_4",
+      "person1": "孙齐齐",
+      "person2": "王浩",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_049",
+      "period": "college_2_4",
+      "person1": "盛昱乾",
+      "person2": "普友乐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_050",
+      "period": "college_2_4",
+      "person1": "盛昱乾",
+      "person2": "王浩",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_051",
+      "period": "college_2_4",
+      "person1": "普友乐",
       "person2": "王浩",
       "type": "roommate",
       "note": ""

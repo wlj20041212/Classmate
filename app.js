@@ -251,8 +251,8 @@ class RelationshipCalculator {
         );
         if (sameStagePeriod) return sameStagePeriod.id;
 
-        // 同阶段没找到，fallback 到第一个时期
-        return personPeriods[0].id;
+        // 同阶段没找到（跨阶段，如大一人物在大二页面）→ 返回 null，表示无本班同学
+        return null;
     }
 
     /**
@@ -266,6 +266,12 @@ class RelationshipCalculator {
     getClassmates(personId, periodId) {
         // 用本班时期作为缓存键，保证同一人物的本班同学列表稳定
         const homePeriodId = this.getHomePeriodId(personId, periodId);
+
+        // 跨阶段人物（如大一人物在大二页面）无本班同学
+        if (homePeriodId === null) {
+            return [];
+        }
+
         const cacheKey = `${personId}_${homePeriodId}`;
 
         // 使用缓存提升性能
@@ -436,8 +442,17 @@ class RelationshipCalculator {
 
         // 3. 再添加同学节点和边 (任务 9.2: 应用筛选器)
         // 修复：同学节点仅在不存在时添加，不覆盖已存在的特殊关系节点颜色
+        // 修复：已有特殊关系（朋友/暗恋/恋人/舍友）的人不再画同学边，避免双重连线
         if (this.filters.types.classmate) {
             const classmates = this.getClassmates(centerPersonId, periodId);
+            // 收集已有特殊关系边连接的人物（双向）
+            const specialRelated = new Set();
+            edges.forEach(e => {
+                if (e.type !== 'classmate') {
+                    specialRelated.add(e.from);
+                    specialRelated.add(e.to);
+                }
+            });
             classmates.forEach(name => {
                 if (!nodeSet.has(name)) {
                     nodes.push({
@@ -453,6 +468,9 @@ class RelationshipCalculator {
                     nodeSet.add(name);
                     nodeMap.set(name, nodes.length - 1);
                 }
+
+                // 已有特殊关系的人不再画同学边
+                if (specialRelated.has(name)) return;
 
                 // 添加同学关系边
                 edges.push({
@@ -1956,7 +1974,7 @@ class App {
         
         // 更新标题 - 跨班中心人物显示其实际所在班级名称
         const homePeriodId = this.relationshipCalculator.getHomePeriodId(personId, periodId);
-        const homePeriodData = this.timelineController.getPeriodData(homePeriodId) || periodData;
+        const homePeriodData = homePeriodId ? (this.timelineController.getPeriodData(homePeriodId) || periodData) : periodData;
         const graphTitle = document.getElementById('graphTitle');
         if (graphTitle && homePeriodData) {
             graphTitle.textContent = `${homePeriodData.name} - ${personId}`;
