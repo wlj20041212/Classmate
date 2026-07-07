@@ -1907,11 +1907,12 @@ class App {
         // 渲染关系图
         this.graphRenderer.render(graphData, personId, periodId);
         
-        // 更新标题
-        const periodData = this.timelineController.getPeriodData(periodId);
+        // 更新标题 - 跨班中心人物显示其实际所在班级名称
+        const homePeriodId = this.relationshipCalculator.getHomePeriodId(personId, periodId);
+        const homePeriodData = this.timelineController.getPeriodData(homePeriodId) || periodData;
         const graphTitle = document.getElementById('graphTitle');
-        if (graphTitle && periodData) {
-            graphTitle.textContent = `${periodData.name} - ${personId}`;
+        if (graphTitle && homePeriodData) {
+            graphTitle.textContent = `${homePeriodData.name} - ${personId}`;
         }
         
         console.log('[App] 关系图显示完成');
