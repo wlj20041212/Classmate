@@ -50,6 +50,7 @@
                             <label class="filter-check"><input type="checkbox" data-type="friend" checked><span class="dot friend"></span>朋友</label>
                             <label class="filter-check"><input type="checkbox" data-type="crush" checked><span class="dot crush"></span>暗恋</label>
                             <label class="filter-check"><input type="checkbox" data-type="lover" checked><span class="dot lover"></span>恋人</label>
+                            <label class="filter-check"><input type="checkbox" data-type="roommate" checked><span class="dot roommate"></span>舍友</label>
                             <label class="filter-check"><input type="checkbox" data-type="classmate" checked><span class="dot classmate"></span>同学</label>
                         </div>
                     </div>
@@ -84,10 +85,10 @@
                         <li>使用鼠标滚轮缩放，拖拽查看不同区域</li>
                         <li>移动端支持双指缩放和单指拖拽</li>
                     </ul>
-                    <h3>关系筛选 (任务 9.2)</h3>
+                    <h3>关系筛选</h3>
                     <ul>
                         <li><b>范围筛选</b>: 全部 / 同班 / 跨班 三种模式</li>
-                        <li><b>类型筛选</b>: 可单独勾选朋友、暗恋、恋人、同学</li>
+                        <li><b>类型筛选</b>: 可单独勾选朋友、暗恋、恋人、舍友、同学</li>
                         <li>筛选器变化时关系图会实时刷新</li>
                     </ul>
                     <h3>跨班人物说明</h3>
@@ -99,7 +100,7 @@
                     <h3>Owner 模式</h3>
                     <ul>
                         <li>点击右上角"Owner 登录"输入密码进入编辑模式</li>
-                        <li>Owner 模式下可添加人物、添加/删除关系</li>
+                        <li>Owner 模式下可添加人物、添加/修改/删除关系</li>
                         <li>支持导出 data.json 和导入 JSON 文件</li>
                         <li><b>数据持久化流程</b>: 编辑 → 导出 data.json → 提交到 GitHub → 部署生效</li>
                         <li>退出登录可返回 Visitor 模式（仅查看）</li>

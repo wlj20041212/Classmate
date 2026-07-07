@@ -246,6 +246,7 @@ body {
 .filter-check .dot.friend { background: #00C957; }
 .filter-check .dot.crush { background: #FF1493; }
 .filter-check .dot.lover { background: #FF0000; }
+.filter-check .dot.roommate { background: #9370DB; }
 .filter-check .dot.classmate { background: #87CEEB; }
 
 .graph-container {

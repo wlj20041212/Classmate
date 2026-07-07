@@ -127,7 +127,7 @@ class GraphCache {
      * @returns {string} 缓存键
      */
     makeKey(personId, periodId, filters) {
-        const filterKey = `${filters.scope}|${filters.types.friend}|${filters.types.crush}|${filters.types.lover}|${filters.types.classmate}`;
+        const filterKey = `${filters.scope}|${filters.types.friend}|${filters.types.crush}|${filters.types.lover}|${filters.types.roommate}|${filters.types.classmate}`;
         return `${personId}@${periodId}#${filterKey}`;
     }
 
@@ -200,6 +200,7 @@ class RelationshipCalculator {
                 friend: true,
                 crush: true,
                 lover: true,
+                roommate: true,     // 舍友
                 classmate: true     // 默认显示同学关系
             }
         };
@@ -495,6 +496,11 @@ class RelationshipCalculator {
                 border: '#CC0000',
                 highlight: { background: '#FF0000', border: '#990000' }
             },
+            'roommate': {
+                background: '#9370DB', // 中紫色
+                border: '#7B68EE',
+                highlight: { background: '#9370DB', border: '#6A5ACD' }
+            },
             'classmate': {
                 background: '#87CEEB', // 天蓝色
                 border: '#4682B4',
@@ -518,6 +524,7 @@ class RelationshipCalculator {
             'friend': { color: '#00C957', highlight: '#00FF7F' },
             'crush': { color: '#FF1493', highlight: '#FF69B4' },
             'lover': { color: '#FF0000', highlight: '#FF4500' },
+            'roommate': { color: '#7B68EE', highlight: '#9370DB' },
             'classmate': { color: '#CCCCCC', highlight: '#999999' }
         };
         
@@ -534,6 +541,7 @@ class RelationshipCalculator {
             'friend': '朋友',
             'crush': '暗恋',
             'lover': '恋人',
+            'roommate': '舍友',
             'classmate': '同学'
         };
         return labels[type] || type;
@@ -581,7 +589,8 @@ class RelationshipCalculator {
             totalClassmates: 0,
             totalFriends: 0,
             totalCrushes: 0,
-            totalLovers: 0
+            totalLovers: 0,
+            totalRoommates: 0
         };
 
         this.data.periods.forEach(period => {
@@ -592,6 +601,7 @@ class RelationshipCalculator {
                 const friends = specialRels.filter(r => r.type === 'friend').length;
                 const crushes = specialRels.filter(r => r.type === 'crush').length;
                 const lovers = specialRels.filter(r => r.type === 'lover').length;
+                const roommates = specialRels.filter(r => r.type === 'roommate').length;
                 
                 stats.periods.push({
                     periodId: period.id,
@@ -599,13 +609,15 @@ class RelationshipCalculator {
                     classmates: classmates.length,
                     friends,
                     crushes,
-                    lovers
+                    lovers,
+                    roommates
                 });
                 
                 stats.totalClassmates += classmates.length;
                 stats.totalFriends += friends;
                 stats.totalCrushes += crushes;
                 stats.totalLovers += lovers;
+                stats.totalRoommates += roommates;
             }
         });
 
@@ -616,7 +628,7 @@ class RelationshipCalculator {
      * 设置筛选器（任务 9.2）
      * @param {Object} filters - 筛选器配置
      * @param {string} filters.scope - 范围筛选 'all' | 'same-class' | 'cross-class'
-     * @param {Object} filters.types - 类型筛选 { friend, crush, lover, classmate }
+     * @param {Object} filters.types - 类型筛选 { friend, crush, lover, roommate, classmate }
      */
     setFilters(filters) {
         if (filters.scope !== undefined) {
@@ -651,6 +663,7 @@ class RelationshipCalculator {
                 friend: true,
                 crush: true,
                 lover: true,
+                roommate: true,
                 classmate: true
             }
         };
@@ -829,7 +842,7 @@ class DataValidator {
             this.errors.push(`${prefix}: type 必须是字符串`);
         } else {
             // 验证关系类型
-            const validTypes = ['friend', 'crush', 'lover', 'classmate'];
+            const validTypes = ['friend', 'crush', 'lover', 'roommate', 'classmate'];
             if (!validTypes.includes(rel.type)) {
                 this.warnings.push(`${prefix}.type: 未知的关系类型 "${rel.type}"，有效类型: ${validTypes.join(', ')}`);
             }
@@ -1961,6 +1974,7 @@ class App {
             { type: 'friend', label: '朋友', color: '#00FF7F', border: '#00C957' },
             { type: 'crush', label: '暗恋 (虚线)', color: '#FF69B4', border: '#FF1493' },
             { type: 'lover', label: '恋人', color: '#FF0000', border: '#CC0000' },
+            { type: 'roommate', label: '舍友', color: '#9370DB', border: '#7B68EE' },
             { type: 'classmate', label: '同学', color: '#87CEEB', border: '#4682B4' },
             { type: 'cross-class', label: '跨班人物 (橙虚边框)', color: '#FFFFFF', border: '#FF8C00', dashed: true }
         ];
@@ -2522,7 +2536,7 @@ class DataManager {
      * 添加关系 (任务 8.1)
      * @param {string} person1 - 人物1姓名
      * @param {string} person2 - 人物2姓名
-     * @param {string} type - 关系类型 (friend, crush, lover, classmate)
+     * @param {string} type - 关系类型 (friend, crush, lover, roommate, classmate)
      * @param {string} periodId - 时间段 ID
      * @param {string} note - 备注 (可选)
      * @returns {Object} 创建的关系对象
@@ -2607,17 +2621,19 @@ class DataManager {
             throw new Error(error);
         }
 
-        // 如果更新了 person1 或 person2，验证人物在 roster 中
+        // 如果更新了 person1 或 person2，验证人物在对应时期 roster 中
+        // 注意：若同时更新了 period，应使用新时期的 roster 验证
         if (updates.person1 || updates.person2) {
-            const period = this.data.periods.find(p => p.id === rel.period);
+            const effectivePeriodId = updates.period || rel.period;
+            const period = this.data.periods.find(p => p.id === effectivePeriodId);
             if (period) {
                 if (updates.person1 && !period.roster.includes(updates.person1)) {
-                    const error = `Person1 "${updates.person1}" not found in period "${rel.period}"`;
+                    const error = `Person1 "${updates.person1}" not found in period "${effectivePeriodId}"`;
                     console.error('[DataManager] ' + error);
                     throw new Error(error);
                 }
                 if (updates.person2 && !period.roster.includes(updates.person2)) {
-                    const error = `Person2 "${updates.person2}" not found in period "${rel.period}"`;
+                    const error = `Person2 "${updates.person2}" not found in period "${effectivePeriodId}"`;
                     console.error('[DataManager] ' + error);
                     throw new Error(error);
                 }
@@ -2967,6 +2983,7 @@ class EditPanel {
                         <option value="friend">朋友</option>
                         <option value="crush">暗恋</option>
                         <option value="lover">恋人</option>
+                        <option value="roommate">舍友</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -3175,8 +3192,14 @@ class EditPanel {
             </div>
         `;
         
-        // 绑定删除按钮事件
+        // 绑定编辑和删除按钮事件
         relationships.forEach(rel => {
+            const editBtn = listContainer.querySelector(`#editRel_${rel.id}`);
+            if (editBtn) {
+                editBtn.addEventListener('click', () => {
+                    this.handleEditRelationship(rel.id, rel);
+                });
+            }
             const deleteBtn = listContainer.querySelector(`#deleteRel_${rel.id}`);
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', () => {
@@ -3201,6 +3224,7 @@ class EditPanel {
             'friend': '朋友',
             'crush': '暗恋',
             'lover': '恋人',
+            'roommate': '舍友',
             'classmate': '同学'
         };
         const typeLabel = typeLabels[rel.type] || rel.type;
@@ -3209,6 +3233,7 @@ class EditPanel {
             'friend': '#00FF7F',
             'crush': '#FF69B4',
             'lover': '#FF0000',
+            'roommate': '#9370DB',
             'classmate': '#87CEEB'
         };
         const typeColor = typeColors[rel.type] || '#CCCCCC';
@@ -3227,14 +3252,24 @@ class EditPanel {
                         ${rel.note ? ` • ${rel.note}` : ''}
                     </div>
                 </div>
-                <button 
-                    id="deleteRel_${rel.id}" 
-                    class="btn btn-danger" 
-                    style="padding: 6px 12px; font-size: 0.9rem;"
-                    title="删除关系"
-                >
-                    🗑️ 删除
-                </button>
+                <div style="display: flex; gap: 6px;">
+                    <button 
+                        id="editRel_${rel.id}" 
+                        class="btn btn-primary" 
+                        style="padding: 6px 12px; font-size: 0.9rem;"
+                        title="修改关系"
+                    >
+                        ✏️ 修改
+                    </button>
+                    <button 
+                        id="deleteRel_${rel.id}" 
+                        class="btn btn-danger" 
+                        style="padding: 6px 12px; font-size: 0.9rem;"
+                        title="删除关系"
+                    >
+                        🗑️ 删除
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -3352,6 +3387,148 @@ class EditPanel {
             console.error('[EditPanel] 添加关系失败:', error);
             showToast('添加关系失败: ' + error.message, 'error');
         }
+    }
+
+    /**
+     * 处理修改关系
+     * 弹出修改表单，可修改人物1、人物2、关系类型、时期、备注
+     * @param {string} relationshipId - 关系 ID
+     * @param {Object} rel - 当前关系对象
+     */
+    handleEditRelationship(relationshipId, rel) {
+        console.log(`[EditPanel] 修改关系: ${relationshipId}`, rel);
+
+        // 若已有打开的修改弹窗，先移除
+        const existing = document.getElementById('editRelModal');
+        if (existing) existing.remove();
+
+        const periods = this.timelineController.getAllPeriods();
+        const periodOptions = periods.map(p =>
+            `<option value="${p.id}" ${p.id === rel.period ? 'selected' : ''}>${p.name}</option>`
+        ).join('');
+
+        const typeOptions = [
+            { value: 'friend', label: '朋友' },
+            { value: 'crush', label: '暗恋' },
+            { value: 'lover', label: '恋人' },
+            { value: 'roommate', label: '舍友' }
+        ].map(t =>
+            `<option value="${t.value}" ${t.value === rel.type ? 'selected' : ''}>${t.label}</option>`
+        ).join('');
+
+        // 构建当前时期的人物选项
+        const currentPeriod = this.timelineController.getPeriodData(rel.period);
+        const buildPersonOptions = (selected) => {
+            if (!currentPeriod) return '';
+            return currentPeriod.roster.map(name =>
+                `<option value="${name}" ${name === selected ? 'selected' : ''}>${name}</option>`
+            ).join('');
+        };
+
+        // 创建弹窗
+        const modal = document.createElement('div');
+        modal.id = 'editRelModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:8px;padding:24px;width:90%;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+                <h3 style="color:#667eea;margin-bottom:16px;margin-top:0;">✏️ 修改关系</h3>
+                <form id="editRelForm" style="display:flex;flex-direction:column;gap:12px;">
+                    <div class="form-group">
+                        <label for="editRelPeriod">时期:</label>
+                        <select id="editRelPeriod" required>
+                            ${periodOptions}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRelPerson1">人物1:</label>
+                        <select id="editRelPerson1" required>
+                            ${buildPersonOptions(rel.person1)}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRelPerson2">人物2:</label>
+                        <select id="editRelPerson2" required>
+                            ${buildPersonOptions(rel.person2)}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRelType">关系类型:</label>
+                        <select id="editRelType" required>
+                            ${typeOptions}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRelNote">备注:</label>
+                        <input type="text" id="editRelNote" value="${rel.note || ''}" placeholder="例如：断联" />
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+                        <button type="button" id="editRelCancel" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-success">💾 保存修改</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // 时期切换时更新人物选项
+        const editPeriodSelect = modal.querySelector('#editRelPeriod');
+        const editPerson1 = modal.querySelector('#editRelPerson1');
+        const editPerson2 = modal.querySelector('#editRelPerson2');
+        editPeriodSelect.addEventListener('change', () => {
+            const pd = this.timelineController.getPeriodData(editPeriodSelect.value);
+            if (!pd) return;
+            const opts = (sel) => pd.roster.map(name =>
+                `<option value="${name}" ${name === sel ? 'selected' : ''}>${name}</option>`
+            ).join('');
+            editPerson1.innerHTML = opts(editPerson1.value);
+            editPerson2.innerHTML = opts(editPerson2.value);
+        });
+
+        // 取消按钮
+        modal.querySelector('#editRelCancel').addEventListener('click', () => modal.remove());
+        // 点击遮罩关闭
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+        // 表单提交
+        modal.querySelector('#editRelForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newPeriod = editPeriodSelect.value;
+            const newPerson1 = editPerson1.value;
+            const newPerson2 = editPerson2.value;
+            const newType = modal.querySelector('#editRelType').value;
+            const newNote = modal.querySelector('#editRelNote').value.trim();
+
+            if (!newPerson1 || !newPerson2) {
+                showToast('请选择两个人物', 'error');
+                return;
+            }
+            if (newPerson1 === newPerson2) {
+                showToast('不能选择同一个人物', 'error');
+                return;
+            }
+
+            try {
+                this.dataManager.updateRelationship(relationshipId, {
+                    period: newPeriod,
+                    person1: newPerson1,
+                    person2: newPerson2,
+                    type: newType,
+                    note: newNote
+                });
+                showToast('✓ 关系已修改', 'success');
+                modal.remove();
+                // 刷新关系列表
+                const filterPeriod = document.getElementById('filterPeriod')?.value || '';
+                this.renderRelationshipList(filterPeriod);
+                // 触发数据变更事件
+                document.dispatchEvent(new CustomEvent('dataChanged', {
+                    detail: { action: 'editRelationship', relationshipId }
+                }));
+            } catch (err) {
+                console.error('[EditPanel] 修改关系失败:', err);
+                showToast('修改关系失败: ' + err.message, 'error');
+            }
+        });
     }
 
     /**

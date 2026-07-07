@@ -167,7 +167,7 @@
       "id": "rel_013",
       "period": "middle_class1",
       "person1": "原新文",
-      "person2": "王敏",
+      "person2": "马琰",
       "type": "crush",
       "note": ""
     },
@@ -305,6 +305,78 @@
       "person1": "王乐江",
       "person2": "杨天",
       "type": "friend",
+      "note": ""
+    },
+    {
+      "id": "rel_031",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "王子文",
+      "type": "lover",
+      "note": ""
+    },
+    {
+      "id": "rel_032",
+      "period": "college_1",
+      "person1": "王乐江",
+      "person2": "孙齐齐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_033",
+      "period": "college_1",
+      "person1": "王乐江",
+      "person2": "盛昱乾",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_034",
+      "period": "college_1",
+      "person1": "王乐江",
+      "person2": "普友乐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_035",
+      "period": "college_1",
+      "person1": "王乐江",
+      "person2": "王浩",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_036",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "孙齐齐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_037",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "盛昱乾",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_038",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "普友乐",
+      "type": "roommate",
+      "note": ""
+    },
+    {
+      "id": "rel_039",
+      "period": "college_2_4",
+      "person1": "王乐江",
+      "person2": "王浩",
+      "type": "roommate",
       "note": ""
     }
   ]
