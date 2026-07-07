@@ -217,7 +217,10 @@ class RelationshipCalculator {
         if (periodId.startsWith('middle')) return 'middle';
         if (periodId.startsWith('high')) return 'high';
         if (periodId.startsWith('repeat')) return 'repeat';
-        if (periodId.startsWith('college')) return 'college';
+        // 大一和大二-大四是先后关系（非平行班级），需分为不同阶段
+        // 避免大二-大四的恋爱关系在大一页面显示
+        if (periodId === 'college_1') return 'college_1';
+        if (periodId === 'college_2_4') return 'college_2_4';
         return 'other';
     }
 
@@ -1808,6 +1811,50 @@ class App {
                 this.refreshCurrentGraph();
             });
         });
+
+        // 搜索栏：搜索当前时期的同学并切换中心人物
+        const searchInput = document.getElementById('personSearch');
+        const searchBtn = document.getElementById('personSearchBtn');
+        if (searchInput && searchBtn) {
+            const doSearch = () => {
+                const query = searchInput.value.trim();
+                if (!query) {
+                    showToast('请输入要搜索的名字', 'info');
+                    return;
+                }
+                if (!this.currentPeriod) {
+                    showToast('请先选择一个时期', 'error');
+                    return;
+                }
+                const periodData = this.timelineController.getPeriodData(this.currentPeriod);
+                if (!periodData) {
+                    showToast('当前时期数据不存在', 'error');
+                    return;
+                }
+                // 在当前时期 roster 中搜索（支持部分匹配）
+                const matched = periodData.roster.filter(name =>
+                    name.includes(query)
+                );
+                if (matched.length === 0) {
+                    showToast(`当前时期（${periodData.name}）没有找到"${query}"`, 'error');
+                    return;
+                }
+                if (matched.length === 1) {
+                    // 唯一匹配：直接切换中心
+                    showToast(`✓ 已切换到 ${matched[0]}`, 'success');
+                    this.showPersonGraph(matched[0], this.currentPeriod);
+                    searchInput.value = '';
+                } else {
+                    // 多个匹配：切换到第一个并提示
+                    showToast(`找到 ${matched.length} 人，已切换到 ${matched[0]}（可继续搜索更精确的名字）`, 'info');
+                    this.showPersonGraph(matched[0], this.currentPeriod);
+                }
+            };
+            searchBtn.addEventListener('click', doSearch);
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') doSearch();
+            });
+        }
     }
     
     /**
