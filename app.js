@@ -243,7 +243,8 @@ class RelationshipCalculator {
         // 跨班人物：在同阶段内找他实际所在的时期
         const currentStage = this.getStage(currentPeriodId);
         const personPeriods = this.getPersonPeriods(personId);
-        if (personPeriods.length === 0) return currentPeriodId;
+        // 人物不在任何 roster 中（外部朋友，如杨天、马奴海）→ 无本班同学
+        if (personPeriods.length === 0) return null;
 
         // 优先选择同阶段的其他时期作为他的"本班"
         const sameStagePeriod = personPeriods.find(p =>
