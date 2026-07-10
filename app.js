@@ -923,19 +923,20 @@ class DataValidator {
             const roster = period.roster;
 
             // 验证 person1 在全局人物集合中存在
-            // 例外：friend 类型关系的人物可以是跨班朋友，不强制在 roster 中
-            // （如大学的杨天、马奴海等外部朋友，与王乐江是朋友但不是任何班级同学）
-            if (rel.person1 && !allPersons.has(rel.person1) && rel.type !== 'friend') {
+            // 例外：特殊关系（friend/crush/lover/roommate）人物可以是外部人员，不强制在 roster 中
+            // （如大学的杨天、马奴海等外部朋友；王子文是外部恋人等）
+            const isSpecialType = ['friend', 'crush', 'lover', 'roommate'].includes(rel.type);
+            if (rel.person1 && !allPersons.has(rel.person1) && !isSpecialType) {
                 this.errors.push(`${prefix}: person1 "${rel.person1}" 不存在于任何 period 的 roster 中`);
-            } else if (rel.person1 && !allPersons.has(rel.person1) && rel.type === 'friend') {
-                this.warnings.push(`${prefix}: person1 "${rel.person1}" 为外部朋友（不在任何 roster 中）`);
+            } else if (rel.person1 && !allPersons.has(rel.person1) && isSpecialType) {
+                this.warnings.push(`${prefix}: person1 "${rel.person1}" 为外部人员（不在任何 roster 中）`);
             }
 
             // 验证 person2 在全局人物集合中存在
-            if (rel.person2 && !allPersons.has(rel.person2) && rel.type !== 'friend') {
+            if (rel.person2 && !allPersons.has(rel.person2) && !isSpecialType) {
                 this.errors.push(`${prefix}: person2 "${rel.person2}" 不存在于任何 period 的 roster 中`);
-            } else if (rel.person2 && !allPersons.has(rel.person2) && rel.type === 'friend') {
-                this.warnings.push(`${prefix}: person2 "${rel.person2}" 为外部朋友（不在任何 roster 中）`);
+            } else if (rel.person2 && !allPersons.has(rel.person2) && isSpecialType) {
+                this.warnings.push(`${prefix}: person2 "${rel.person2}" 为外部人员（不在任何 roster 中）`);
             }
 
             // 跨班关系检查（任务 9）：如果人物不在关系所属 period 的 roster 中，仅给出警告
