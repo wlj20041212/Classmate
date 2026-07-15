@@ -1,0 +1,10 @@
+{
+  "name": "timeline-social-network",
+  "version": "1.0.0",
+  "private": true,
+  "description": "时间轴社交关系网络可视化系统 - 纯静态站点",
+  "scripts": {
+    "build": "echo 'Static site - no build step required'",
+    "dev": "echo 'Static site - served directly from root'"
+  }
+}
