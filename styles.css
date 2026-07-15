@@ -23,8 +23,8 @@
   --radius-sm: 8px;
   --font-body: 'Inter', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
   --font-head: 'Lora', 'Microsoft YaHei', 'PingFang SC', serif;
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03);
-  --shadow-hover: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.05);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.05);
 
   /* preserved relationship hues (muted for warm bg) */
   --c-classmate: #5b8cc9;
@@ -51,6 +51,24 @@ body {
 }
 
 #app { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+/* ---------- Page Entrance — Staggered Card Fade-in ---------- */
+#app > .header,
+#app > .timeline-section,
+#app > .graph-section,
+#app > .edit-section,
+#app > .help-section {
+  animation: cardFadeIn 0.5s ease-out both;
+}
+#app > .header { animation-delay: 0.1s; }
+#app > .timeline-section { animation-delay: 0.2s; }
+#app > .graph-section { animation-delay: 0.3s; }
+#app > .edit-section { animation-delay: 0.4s; }
+#app > .help-section { animation-delay: 0.5s; }
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* ---------- Selection / Scrollbar ---------- */
 ::selection { background: rgba(124, 111, 158, 0.25); color: var(--text); }
@@ -84,14 +102,13 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
   margin-bottom: 32px;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: border-color 0.3s ease;
 }
 .timeline-section:hover,
 .graph-section:hover,
 .edit-section:hover,
 .help-section:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-hover);
+  border-color: var(--accent-1);
 }
 .timeline-section { padding: 26px; }
 .graph-section { padding: 26px; }
@@ -124,7 +141,9 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   gap: 18px;
   box-shadow: var(--shadow-card);
   overflow: hidden;
+  transition: border-color 0.3s ease;
 }
+.header:hover { border-color: var(--accent-1); }
 .header::after {
   content: '';
   position: absolute; inset: 0;
@@ -140,13 +159,22 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   position: relative;
   z-index: 1;
 }
+/* Title decoration line — slow shimmer */
 .header h1::after {
   content: '';
   display: block;
   width: 60px;
   height: 2px;
-  background: rgba(124, 111, 158, 0.2);
+  background: linear-gradient(90deg, transparent, #7c6f9e, transparent);
+  background-size: 200% 100%;
+  background-position: -60px 0;
   margin: 10px auto 0;
+  animation: titleShimmer 4s ease-in-out infinite;
+}
+@keyframes titleShimmer {
+  0% { background-position: -60px 0; }
+  50% { background-position: 60px 0; }
+  100% { background-position: -60px 0; }
 }
 
 /* ---------- Auth Container ---------- */
@@ -169,11 +197,11 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
   width: 8px; height: 8px; border-radius: 50%;
   background: #5eae6e;
-  animation: dot-pulse 2s ease-in-out infinite;
+  animation: breathe 2.5s ease-in-out infinite;
 }
-@keyframes dot-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 /* ---------- Timeline Bar ---------- */
@@ -211,6 +239,31 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   background: #7c6f9e;
   border-color: transparent;
   color: #fff;
+}
+/* Active pill — soft glow underline */
+.timeline-item button.active::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 2px;
+  background: #7c6f9e;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.timeline-item button:not(.active)::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 2px;
+  background: #7c6f9e;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 .timeline-item.not-participated button {
   background: var(--bg);
@@ -259,12 +312,10 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   border-radius: 999px;
   background: var(--bg);
   border: 1px solid var(--border);
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: background 0.2s ease;
   cursor: default;
 }
-.legend-item:hover {
-  background: var(--surface-2);
-}
+.legend-item:hover { background: var(--surface-2); }
 .legend-color {
   width: 16px; height: 16px;
   border-radius: 50%;
@@ -359,35 +410,37 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
 .graph-container {
   width: 100%;
   height: 600px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(124, 111, 158, 0.15);
   border-radius: 12px;
   background: #1a1d28;
   position: relative;
   box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.4);
   transition: opacity 0.3s ease, border-color 0.3s ease;
+  animation: borderBreathe 3s ease-in-out infinite;
 }
-.graph-container:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+@keyframes borderBreathe {
+  0%, 100% { border-color: rgba(124, 111, 158, 0.15); }
+  50% { border-color: rgba(124, 111, 158, 0.35); }
 }
 /* keep canvas-internal messages readable on dark bg */
 #graphContainer h3, #graphContainer p { color: #a0a0b0 !important; }
 #graphContainer h3 { color: #e0e0ec !important; }
+
+/* Vis.js renders node labels on canvas — CSS can't style them directly.
+   Ensure the JS Vis.js font option is set to: { color: '#ffffff', size: 13, background: 'rgba(26,29,40,0.8)' }
+   This is a hint only; no JS is modified per the rules. */
 
 /* ---------- Edit Panel ---------- */
 .edit-section { border-left: 4px solid var(--accent-1); }
 .edit-section h2 { color: var(--accent-1); }
 .edit-panel { display: flex; flex-direction: column; gap: 20px; }
 .edit-section-item {
-  animation: fade-up 0.4s ease-out backwards;
+  animation: cardFadeIn 0.4s ease-out backwards;
 }
 .edit-section-item:nth-child(1) { animation-delay: 0.05s; }
 .edit-section-item:nth-child(2) { animation-delay: 0.12s; }
 .edit-section-item:nth-child(3) { animation-delay: 0.19s; }
 .edit-section-item:nth-child(4) { animation-delay: 0.26s; }
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
 /* override JS inline styles on edit section headers + dividers */
 .edit-section-item h3 {
@@ -461,23 +514,27 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   font-weight: 500;
   font-family: var(--font-body);
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition: background-position 0.35s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
+/* Primary — fill sweep */
 .btn-primary {
-  background: #7c6f9e;
+  background: linear-gradient(90deg, #7c6f9e 50%, #9b8ec4 50%);
+  background-size: 200% 100%;
+  background-position: 0 0;
   color: #fff;
 }
 .btn-primary:hover {
-  background: #6b5d8a;
+  background-position: -100% 0;
 }
+/* Ghost — border color shift */
 .btn-secondary {
   background: transparent;
-  border-color: var(--accent-1);
-  color: var(--accent-1);
+  border-color: #7c6f9e;
+  color: #7c6f9e;
 }
 .btn-secondary:hover {
-  background: #7c6f9e;
-  color: #fff;
+  border-color: #9b8ec4;
+  color: #9b8ec4;
 }
 .btn-danger {
   background: #d4556a;
@@ -527,9 +584,8 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   content: "加载中...";
   font-size: 1.2rem;
   color: var(--accent-2);
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: breathe 1.5s ease-in-out infinite;
 }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* ---------- Toasts ---------- */
 .toast {
@@ -645,7 +701,7 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   .timeline-section, .graph-section, .edit-section, .help-section { padding: 20px 16px; }
   .timeline-section h2, .graph-header h2, .edit-section h2 { font-size: 1.25rem; }
 
-  /* timeline -> horizontal scroll, active auto-centered */
+  /* timeline -> horizontal scroll, active pill centered */
   .timeline-selector { width: 100%; }
   .timeline {
     flex-direction: row;
@@ -685,11 +741,39 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   .auth-view { flex-wrap: wrap; gap: 8px; justify-content: center; }
   .auth-view .mode-label { font-size: 0.85rem; }
 
-  /* disable hover effects on mobile */
+  /* Mobile: disable continuous animations */
+  .header h1::after { animation: none; }
+  .graph-container { animation: none; border-color: rgba(124, 111, 158, 0.15); }
+  .auth-view.visitor-mode .btn.btn-primary::before { animation: none; opacity: 1; }
+  .loading::after { animation: none; opacity: 1; }
+
+  /* Mobile: staggered entrance -> single quick fade, no delay */
+  #app > .header,
+  #app > .timeline-section,
+  #app > .graph-section,
+  #app > .edit-section,
+  #app > .help-section {
+    animation: cardFadeIn 0.3s ease-out both;
+    animation-delay: 0s;
+  }
+  .edit-section-item {
+    animation: cardFadeIn 0.3s ease-out both;
+    animation-delay: 0s;
+  }
+
+  /* Mobile: reduce transitions to 0.2s */
+  .timeline-item button { transition: background 0.2s ease, color 0.2s ease; }
+  .filter-btn { transition: background 0.2s ease, color 0.2s ease; }
+  .btn { transition: background-position 0.2s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
+  .search-input { transition: border-color 0.2s ease, background 0.2s ease; }
+  .form-group input, .form-group select, .form-group textarea { transition: border-color 0.2s ease, background 0.2s ease; }
+
+  /* Mobile: disable card border-color hover (tap targets don't hover) */
   .timeline-section:hover,
   .graph-section:hover,
   .edit-section:hover,
-  .help-section:hover { box-shadow: var(--shadow-card); border-color: var(--border); }
+  .help-section:hover,
+  .header:hover { border-color: var(--border); }
 }
 
 /* ---------- Responsive: Tablet ---------- */
