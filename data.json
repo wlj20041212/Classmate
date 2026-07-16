@@ -155,7 +155,14 @@
       "type": "friend",
       "note": ""
     },
-  
+   {
+      "id": "rel_012",
+      "period": "middle_class1",
+      "person1": "王乐江",
+      "person2": "范国苍",
+      "type": "friend",
+      "note": ""
+    },
     {
       "id": "rel_013",
       "period": "middle_class1",
