@@ -1754,6 +1754,13 @@ class App {
         document.addEventListener('personSelected', (event) => {
             const { personId, periodId } = event.detail;
             console.log('[App] 人物选择事件:', personId, '@', periodId);
+            // GA4 事件追踪：点击节点
+            if (typeof gtag === 'function') {
+                gtag('event', 'select_node', {
+                    person_name: personId,
+                    period: periodId
+                });
+            }
             this.showPersonGraph(personId, periodId);
         });
         
@@ -1861,6 +1868,17 @@ class App {
                 const matched = periodData.roster.filter(name =>
                     name.includes(query)
                 );
+
+                // GA4 事件追踪：搜索人物
+                if (typeof gtag === 'function') {
+                    gtag('event', 'search_person', {
+                        search_term: query,
+                        period: this.currentPeriod,
+                        result_count: matched.length,
+                        matched: matched.length > 0
+                    });
+                }
+
                 if (matched.length === 0) {
                     showToast(`当前时期（${periodData.name}）没有找到"${query}"`, 'error');
                     return;
@@ -1915,9 +1933,17 @@ class App {
      */
     onPeriodChanged(periodId, periodData) {
         console.log('[App] 处理时期切换:', periodId);
-        
+
         this.currentPeriod = periodId;
-        
+
+        // GA4 事件追踪：切换时期
+        if (typeof gtag === 'function') {
+            gtag('event', 'switch_period', {
+                period_id: periodId,
+                period_name: periodData.name
+            });
+        }
+
         // 更新图表标题
         const graphTitle = document.getElementById('graphTitle');
         if (graphTitle) {
