@@ -1756,9 +1756,10 @@ class App {
             console.log('[App] 人物选择事件:', personId, '@', periodId);
             // GA4 事件追踪：点击节点
             if (typeof gtag === 'function') {
+                const periodData = this.timelineController.getPeriodData(periodId);
                 gtag('event', 'select_node', {
                     person_name: personId,
-                    period: periodId
+                    period_name: periodData ? periodData.name : periodId
                 });
             }
             this.showPersonGraph(personId, periodId);
@@ -1873,7 +1874,7 @@ class App {
                 if (typeof gtag === 'function') {
                     gtag('event', 'search_person', {
                         search_term: query,
-                        period: this.currentPeriod,
+                        period_name: periodData.name,
                         result_count: matched.length,
                         matched: matched.length > 0
                     });
