@@ -818,6 +818,86 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
 }
 .ai-float-btn:active { transform: scale(0.95); }
 
+/* ---------- AI New-Feature Tip Bubble ---------- */
+.ai-tip-bubble {
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  max-width: 280px;
+  background: #fff;
+  border: 1px solid var(--border, #e8e4df);
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 12px 14px;
+  z-index: 9002;
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  font-family: var(--font-body, 'Inter', 'Microsoft YaHei', sans-serif);
+}
+.ai-tip-bubble.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.ai-tip-bubble.hide {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  pointer-events: none;
+}
+.ai-tip-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-tip-emoji {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.ai-tip-text {
+  font-size: 13px;
+  color: var(--text, #2d2838);
+  line-height: 1.5;
+  flex: 1;
+}
+.ai-tip-text strong {
+  color: #7c3aed;
+  font-weight: 600;
+}
+.ai-tip-close {
+  background: none;
+  border: none;
+  color: var(--text-faint, #9a93a8);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.ai-tip-close:hover { color: var(--text, #2d2838); }
+/* 气泡小箭头指向按钮 */
+.ai-tip-arrow {
+  position: absolute;
+  bottom: -7px;
+  right: 20px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-right: 1px solid var(--border, #e8e4df);
+  border-bottom: 1px solid var(--border, #e8e4df);
+  transform: rotate(45deg);
+}
+@media (max-width: 768px) {
+  .ai-tip-bubble {
+    bottom: 80px;
+    right: 16px;
+    max-width: 240px;
+  }
+  .ai-tip-arrow { right: 14px; }
+}
+
 /* ---------- AI Sidebar (Desktop only) ---------- */
 .ai-sidebar {
   position: fixed;

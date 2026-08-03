@@ -3982,8 +3982,32 @@ if (typeof module !== 'undefined' && module.exports) {
     const aiSidebar = document.getElementById('aiSidebar');
     const aiClose = document.getElementById('aiSidebarClose');
     const aiIframe = document.getElementById('aiIframe');
+    const aiTipBubble = document.getElementById('aiTipBubble');
+    const aiTipClose = document.getElementById('aiTipClose');
 
     if (!aiBtn) return;
+
+    // ===== 新功能提示气泡 =====
+    // 用户点过/关闭过就不再显示
+    const TIP_KEY = 'lejiang_ai_tip_dismissed_v1';
+    const tipDismissed = localStorage.getItem(TIP_KEY) === '1';
+    function showTipBubble() {
+        if (tipDismissed || !aiTipBubble) return;
+        setTimeout(() => aiTipBubble.classList.add('show'), 800);
+    }
+    function hideTipBubble(permanent) {
+        if (!aiTipBubble) return;
+        aiTipBubble.classList.remove('show');
+        aiTipBubble.classList.add('hide');
+        if (permanent) localStorage.setItem(TIP_KEY, '1');
+    }
+    showTipBubble();
+    if (aiTipClose) {
+        aiTipClose.addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideTipBubble(true);
+        });
+    }
 
     // 判断是否为移动端
     function isMobile() {
@@ -3991,6 +4015,8 @@ if (typeof module !== 'undefined' && module.exports) {
     }
 
     aiBtn.addEventListener('click', () => {
+        // 点击按钮 = 用户已注意到 AI，不再提示
+        hideTipBubble(true);
         if (isMobile()) {
             // 手机端：跳转到 AI 页面
             window.location.href = 'ai.html';
