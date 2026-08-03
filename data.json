@@ -42,14 +42,14 @@
       "name": "23年高中复读班19班",
       "order": 6,
       "participated": true,
-      "roster": ["王乐江", "张雨欣", "包调兰", "董泽聪", "宋占明", "刚满意", "闫晓江", "鲍爱兵", "张国庆", "何黎雯", "安琴艳", "安秀艳", "关越", "王珍珍", "东芳娟", "鲍胜平", "王盼盼", "马文娜", "刘贤", "陈龙飞", "张超", "刘玉环", "刘紫璇", "常腾飞", "杨怡", "李亚丽", "董海鹏", "王鹏涛", "袁亚军", "朱常宇", "高碧霞", "王博", "吕瑞升", "闫彩龙", "王振华", "郭永平", "陈飞霞", "张悦", "包玉洁", "常泽龙", "谈转红", "赵燕汝", "苟佳强", "杜伟霞", "范彦龙", "李博", "郭增鹏", "厚振东", "张勃", "汪宇博", "杜福霞"]
+      "roster": ["王乐江", "张雨欣", "包调兰", "董泽聪", "宋占明", "刚满意", "闫陇江", "鲍爱兵", "张国庆", "何黎雯", "安琴艳", "安秀艳", "关越", "王珍珍", "东芳娟", "鲍胜平", "王盼盼", "马文娜", "刘贤", "陈龙飞", "张超", "刘玉环", "刘紫璇", "常腾飞", "杨怡", "李亚丽", "董海鹏", "王鹏涛", "袁亚军", "朱常宇", "高碧霞", "王博", "吕瑞升", "闫彩龙", "王振华", "郭永平", "陈飞霞", "张悦", "包玉洁", "常泽龙", "谈转红", "赵燕汝", "苟佳强", "杜伟霞", "范彦龙", "李博", "郭增鹏", "厚振东", "张勃", "汪宇博", "杜福霞"]
     },
     {
       "id": "repeat_class20",
       "name": "23年高中复读班20班",
       "order": 7,
       "participated": false,
-      "roster": ["赵增智", "程栗迪", "潘姝璇", "卢小强", "李小强", "朱明霞", "马洪霞", "余鑫", "付俊杰", "刘亚斌", "蒋文江", "刘晋阳", "闫亮亮", "杨博蓉", "何淑红", "赵绍智", "张艳芝", "高腾伟", "李艳伟", "宋鑫", "陈森", "侯俊涛", "李娜", "文杰", "张转芳", "董飞", "陈璟琴", "刘艳霞", "贾永斌", "吕红梅", "丁晓杰", "田成", "史托平", "魏玉刚", "杨登云", "李宝珍", "郑鹏程", "王珊", "王秀堂", "贾海岩", "王二凯", "马骏", "赵玉林", "刘彦强", "牛浩宇", "郝严军"]
+      "roster": ["赵增智", "程奥迪", "潘姝璇", "卢小强", "李小强", "朱明霞", "马洪霞", "余鑫", "付俊杰", "刘亚斌", "蒋文江", "刘晋阳", "闫亮亮", "杨博蓉", "何淑红", "雷斌斌", "张艳芝", "高腾伟", "李艳伟", "宋鑫", "陈森", "侯俊涛", "李娜", "文杰", "张转芳", "董飞", "陈璟琴", "刘艳霞", "贾永斌", "吕红梅", "丁晓杰", "田成", "史托平", "魏玉刚", "杨登云", "李宝珍", "郑鹏程", "王珊", "王秀堂", "贾海岩", "王二凯", "马骏", "赵玉林", "刘彦强", "牛浩宇", "郝严军"]
     },
     {
       "id": "college_1",
@@ -196,6 +196,22 @@
       "note": ""
     },
     {
+      "id": "rel_017",
+      "period": "repeat_class20",
+      "person1": "赵增智",
+      "person2": "雷斌斌",
+      "type": "friend",
+      "note": ""
+    },
+     {
+      "id": "rel_018",
+      "period": "middle_class2",
+      "person1": "赵增智",
+      "person2": "王鹏飞",
+      "type": "friend",
+      "note": ""
+    },
+    {
       "id": "rel_019",
       "period": "high_1",
       "person1": "王乐江",
@@ -229,7 +245,14 @@
       "type": "friend",
       "note": ""
     },
-  
+  {
+      "id": "rel_025",
+      "period": "repeat_class19",
+      "person1": "刚满意",
+      "person2": "杨怡",
+      "type": "crush",
+      "note": ""
+    },
     {
       "id": "rel_026",
       "period": "repeat_class20",
@@ -406,6 +429,150 @@
       "type": "friend",
       "note": ""
     },
+    {
+  "id": "rel_068",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "闫萌萌",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_069",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "蔡朝阳",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_070",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "刚军",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_071",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "霍可佳",
+  "type": "friend",
+  "note": "徒弟"
+},
+{
+  "id": "rel_072",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "胡爱平",
+  "type": "friend",
+  "note": "徒弟"
+},
+{
+  "id": "rel_073",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "朱桐新",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_074",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "董娟",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_075",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "董喜军",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_076",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "付择英",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_077",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "鱼颖",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_078",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "胡沛灵",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_079",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "张嘉飞",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_080",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "张嘉龙",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_081",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "张洋洋",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_082",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "张玉凤",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_083",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "张衡",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_084",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "侯陇南",
+  "type": "friend",
+  "note": ""
+},
+{
+  "id": "rel_085",
+  "period": "repeat_class19",
+  "person1": "宋占明",
+  "person2": "侯陇东",
+  "type": "friend",
+  "note": ""
+},
     {
       "id": "rel_032",
       "period": "college_1",
