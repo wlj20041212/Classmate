@@ -682,20 +682,38 @@ function getCurrentTimeInfo() {
   return `当前时间：${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${days[now.getDay()]} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 }
 
-// ===== 对话记录存储到 localStorage =====
+// ===== 对话记录存储到 localStorage + 上传到 Worker（管理员可跨设备查看）=====
 function saveChatLog(question, answer, success) {
+  const ts = Date.now();
+  const timeStr = new Date(ts).toLocaleString('zh-CN');
+  const qStr = (question || '').slice(0, 500);
+  const aStr = (success ? (answer || '') : '(请求失败) ' + (answer || '')).slice(0, 2000);
+  // 1. 本地存储（离线备份，用户自己可见）
   try {
     const logs = JSON.parse(localStorage.getItem('agnes_chat_logs') || '[]');
-    logs.push({
-      t: new Date().toLocaleString('zh-CN'),
-      q: question,
-      a: success ? answer : '(请求失败) ' + answer,
-      ok: success
-    });
-    // 最多保留 500 条
+    logs.push({ t: timeStr, q: qStr, a: aStr, ok: success });
     if (logs.length > 500) logs.splice(0, logs.length - 500);
     localStorage.setItem('agnes_chat_logs', JSON.stringify(logs));
-  } catch(e) { console.error('[乐江AI] 保存记录失败:', e); }
+  } catch(e) { console.error('[乐江AI] 保存本地记录失败:', e); }
+  // 2. 异步上传到 Worker KV（fire-and-forget，不阻塞主流程）
+  //    管理员可在 Owner 模式查看所有用户、所有设备的聊天记录
+  if (SEARCH_WORKER_URL) {
+    try {
+      fetch(`${SEARCH_WORKER_URL}/chat-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          t: timeStr,
+          ts: ts,
+          q: qStr,
+          a: aStr,
+          ok: success,
+          ua: navigator.userAgent.slice(0, 120),
+          lang: navigator.language
+        })
+      }).catch(e => console.error('[乐江AI] 上传聊天记录失败:', e));
+    } catch(e) { console.error('[乐江AI] 上传聊天记录异常:', e); }
+  }
 }
 
 // ===== 发送消息 =====

@@ -2348,9 +2348,6 @@ class AuthView {
         this.container.innerHTML = `
             <div class="auth-view owner-mode">
                 <span class="mode-label">模式: <strong style="color: #FFD700;">Owner</strong></span>
-                <button id="aiLogsButton" class="btn btn-secondary" title="查看所有用户的 AI 搜索记录" style="margin-right:8px;">
-                    AI 搜索记录
-                </button>
                 <button id="logoutButton" class="btn btn-secondary" title="退出 Owner 模式">
                     退出
                 </button>
@@ -2365,102 +2362,7 @@ class AuthView {
             });
         }
 
-        // 绑定 AI 搜索记录按钮
-        const aiLogsButton = document.getElementById('aiLogsButton');
-        if (aiLogsButton) {
-            aiLogsButton.addEventListener('click', () => {
-                this.showAiSearchLogs();
-            });
-        }
-        
         console.log('[AuthView] Owner 模式界面已渲染');
-    }
-
-    /**
-     * 显示 AI 搜索记录模态框（读取 Cloudflare KV 数据）
-     */
-    async showAiSearchLogs() {
-        // 创建模态框
-        const modal = document.createElement('div');
-        modal.id = 'aiLogsModal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
-        modal.innerHTML = `
-            <div style="background:#fff;border-radius:12px;width:100%;max-width:720px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
-                <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;">
-                    <h3 style="margin:0;font-size:16px;">所有用户的 AI 搜索记录</h3>
-                    <div style="display:flex;gap:8px;">
-                        <button id="refreshAiLogs" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:12px;">刷新</button>
-                        <button id="clearAiLogs" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fee;color:#c00;cursor:pointer;font-size:12px;">清空</button>
-                        <button id="closeAiLogs" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:14px;">关闭</button>
-                    </div>
-                </div>
-                <div id="aiLogsContent" style="flex:1;overflow-y:auto;padding:16px 20px;font-size:13px;color:#444;">
-                    <div style="text-align:center;color:#999;padding:40px 0;">加载中...</div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-
-        const loadLogs = async () => {
-            const content = document.getElementById('aiLogsContent');
-            content.innerHTML = '<div style="text-align:center;color:#999;padding:40px 0;">加载中...</div>';
-            try {
-                const res = await fetch('https://lejiang-search.2252821948.workers.dev/logs?key=lejiang_owner_2024');
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                if (!data.logs || data.logs.length === 0) {
-                    content.innerHTML = '<div style="text-align:center;color:#999;padding:40px 0;">暂无搜索记录</div>';
-                    return;
-                }
-                // 按时间倒序
-                const logs = data.logs.sort((a, b) => b.ts - a.ts);
-                content.innerHTML = logs.map(log => {
-                    const date = new Date(log.ts);
-                    const timeStr = date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-                    // 解析设备类型
-                    let device = '未知';
-                    const ua = log.ua || '';
-                    if (/mobile/i.test(ua)) device = '手机';
-                    else if (/tablet/i.test(ua)) device = '平板';
-                    else if (/windows|mac|linux/i.test(ua)) device = '电脑';
-                    return `
-                    <div style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-                            <div style="flex:1;">
-                                <div style="font-weight:600;color:#2d2838;margin-bottom:4px;">${this.escapeHtml(log.raw || '(空)')}</div>
-                                <div style="font-size:11px;color:#999;">
-                                    <span style="background:#f0ede8;padding:1px 6px;border-radius:4px;margin-right:6px;">搜索词: ${this.escapeHtml(log.clean || '')}</span>
-                                    <span style="background:#e8f4fd;padding:1px 6px;border-radius:4px;margin-right:6px;">${device}</span>
-                                    <span>${timeStr}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('');
-            } catch(e) {
-                content.innerHTML = `<div style="text-align:center;color:#c00;padding:40px 0;">加载失败: ${e.message}<br><br>请确认 Worker 已部署 KV 并配置正确。</div>`;
-            }
-        };
-
-        document.getElementById('closeAiLogs').addEventListener('click', () => modal.remove());
-        document.getElementById('refreshAiLogs').addEventListener('click', loadLogs);
-        document.getElementById('clearAiLogs').addEventListener('click', async () => {
-            if (!confirm('确定要清空所有搜索记录吗？此操作不可恢复。')) return;
-            try {
-                await fetch('https://lejiang-search.2252821948.workers.dev/clear?key=lejiang_owner_2024', { method: 'POST' });
-                loadLogs();
-            } catch(e) { alert('清空失败: ' + e.message); }
-        });
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-
-        loadLogs();
-    }
-
-    escapeHtml(s) {
-        if (!s) return '';
-        const d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
     }
 
     /**
@@ -4007,49 +3909,145 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = { showToast };
 }
 
-// ============== AI 聊天记录查看器 (Owner 模式) ==============
+// ============== AI 聊天记录查看器 (Owner 模式 - 读取 Cloudflare KV 所有用户) ==============
 
 (function() {
     const viewBtn = document.getElementById('viewChatLogsBtn');
     const modal = document.getElementById('chatLogModal');
     const closeBtn = document.getElementById('closeChatLogBtn');
     const clearBtn = document.getElementById('clearChatLogsBtn');
+    const refreshBtn = document.getElementById('refreshChatLogsBtn');
     const content = document.getElementById('chatLogContent');
 
     if (!viewBtn || !modal) return;
 
+    const WORKER_URL = 'https://lejiang-search.2252821948.workers.dev';
+    const OWNER_KEY = 'lejiang_owner_2024';
+
     function escapeHtml(s) {
+        if (!s) return '';
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
     }
 
-    function renderLogs() {
-        let logs = [];
+    async function renderLogs() {
+        // 顶部状态栏 + 加载动画
+        content.innerHTML = `
+            <div style="padding:8px 12px;background:#fafaf8;border-bottom:1px solid #eee;font-size:12px;color:#666;display:flex;justify-content:space-between;align-items:center;">
+                <span id="chatLogsCount">正在加载…</span>
+                <span id="chatLogsLoadTime" style="color:#999;"></span>
+            </div>
+            <div id="chatLogsList" style="overflow-y:auto;">
+                <div style="text-align:center;color:#999;padding:40px 0;">
+                    <div style="display:inline-block;width:24px;height:24px;border:3px solid #e8e4df;border-top-color:#7c3aed;border-radius:50%;animation:chatLogsSpin .8s linear infinite;"></div>
+                    <div style="margin-top:10px;">加载中…</div>
+                </div>
+                <style>@keyframes chatLogsSpin{to{transform:rotate(360deg);}}</style>
+            </div>
+        `;
+        const startTime = performance.now();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-            logs = JSON.parse(localStorage.getItem('agnes_chat_logs') || '[]');
-        } catch(e) { logs = []; }
+            const res = await fetch(`${WORKER_URL}/chat-logs?key=${OWNER_KEY}`, {
+                signal: controller.signal,
+                cache: 'no-store'
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status + (res.status === 403 ? '（owner key 不正确）' : res.status === 500 ? '（Worker 内部错误，请检查 KV 绑定）' : ''));
+            }
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); }
+            catch (jsonErr) {
+                const preview = text.substring(0, 200).replace(/</g, '&lt;');
+                throw new Error('Worker 返回非 JSON 数据。前 200 字符: ' + preview);
+            }
+            const logs = data.logs || [];
+            const countEl = document.getElementById('chatLogsCount');
+            const timeEl = document.getElementById('chatLogsLoadTime');
+            const listEl = document.getElementById('chatLogsList');
+            const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
 
-        if (logs.length === 0) {
-            content.innerHTML = '<p style="text-align:center;color:var(--text-faint);padding:40px 0;">暂无聊天记录</p>';
-            return;
-        }
+            if (logs.length === 0) {
+                if (countEl) countEl.textContent = '暂无聊天记录';
+                if (timeEl) timeEl.textContent = '耗时 ' + elapsed + 's';
+                listEl.innerHTML = '<p style="text-align:center;color:var(--text-faint);padding:40px 0;">暂无聊天记录</p>';
+                return;
+            }
 
-        // 最新的排最上面
-        logs.reverse();
+            // 最新的排最上面
+            logs.sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
-        const html = logs.map(function(log) {
-            var statusBadge = log.ok
-                ? '<span class="log-status log-ok">成功</span>'
-                : '<span class="log-status log-fail">失败</span>';
-            return '<div class="log-item">' +
-                '<div class="log-time">' + escapeHtml(log.t) + ' ' + statusBadge + '</div>' +
-                '<div class="log-q"><b>问:</b> ' + escapeHtml(log.q) + '</div>' +
-                '<div class="log-a"><b>答:</b> ' + escapeHtml(log.a) + '</div>' +
+            if (countEl) countEl.textContent = '共 ' + logs.length + ' 条记录（所有用户）';
+            if (timeEl) timeEl.textContent = '耗时 ' + elapsed + 's';
+
+            // 分批渲染：先渲染前 50 条，其余延迟
+            const renderBatch = (batch) => {
+                return batch.map(function(log) {
+                    var statusBadge = (log.ok === false || log.ok === 0)
+                        ? '<span class="log-status log-fail">失败</span>'
+                        : '<span class="log-status log-ok">成功</span>';
+                    var timeStr = log.t || (log.ts ? new Date(log.ts).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未知时间');
+                    // 解析设备类型
+                    var device = '未知';
+                    var ua = log.ua || '';
+                    if (/mobile/i.test(ua)) device = '手机';
+                    else if (/tablet/i.test(ua)) device = '平板';
+                    else if (/windows|mac|linux/i.test(ua)) device = '电脑';
+                    return '<div class="log-item">' +
+                        '<div class="log-time">' + escapeHtml(timeStr) + ' ' + statusBadge +
+                        ' <span style="background:#e8f4fd;padding:1px 6px;border-radius:4px;font-size:11px;color:#444;">' + device + '</span></div>' +
+                        '<div class="log-q"><b>问:</b> ' + escapeHtml(log.q || '') + '</div>' +
+                        '<div class="log-a"><b>答:</b> ' + escapeHtml(log.a || '') + '</div>' +
+                        '</div>';
+                }).join('');
+            };
+
+            const FIRST_BATCH = 50;
+            const firstBatch = logs.slice(0, FIRST_BATCH);
+            const rest = logs.slice(FIRST_BATCH);
+            listEl.innerHTML = renderBatch(firstBatch);
+
+            if (rest.length > 0) {
+                const moreBtn = document.createElement('div');
+                moreBtn.style.cssText = 'text-align:center;padding:14px;color:#7c3aed;cursor:pointer;font-size:13px;border-top:1px solid #f0f0f0;';
+                moreBtn.textContent = '还有 ' + rest.length + ' 条，点击加载全部…';
+                moreBtn.addEventListener('click', () => {
+                    moreBtn.remove();
+                    listEl.insertAdjacentHTML('beforeend', renderBatch(rest));
+                });
+                listEl.appendChild(moreBtn);
+            }
+        } catch(e) {
+            clearTimeout(timeoutId);
+            let errMsg = e.message;
+            let hint = '';
+            if (e.name === 'AbortError') {
+                errMsg = '请求超时（10 秒）';
+                hint = 'Worker 响应过慢，可能 KV 数据量过大或 Worker 冷启动。请稍后重试。';
+            } else if (e.name === 'TypeError' && /fetch|network/i.test(e.message)) {
+                errMsg = '网络错误：' + e.message;
+                hint = '无法连接 Worker，请检查网络是否畅通。';
+            }
+            content.innerHTML =
+                '<div style="text-align:center;color:#c00;padding:30px 20px;">' +
+                    '<div style="font-size:14px;font-weight:600;margin-bottom:8px;">加载失败</div>' +
+                    '<div style="font-size:12px;color:#666;margin-bottom:12px;">' + escapeHtml(errMsg) + '</div>' +
+                    (hint ? '<div style="font-size:12px;color:#999;background:#fafaf8;padding:10px;border-radius:6px;margin-bottom:12px;">' + escapeHtml(hint) + '</div>' : '') +
+                    '<div style="font-size:12px;color:#999;text-align:left;background:#fafaf8;padding:12px;border-radius:6px;line-height:1.7;">' +
+                        '<strong>排查清单：</strong><br>' +
+                        '1. Cloudflare Workers → 选中 lejiang-search<br>' +
+                        '2. Settings → Variables → KV Namespace Bindings<br>' +
+                        '3. 确认变量名 <code>SEARCH_LOGS</code> 已绑定到命名空间 <code>lejiang_search_logs</code><br>' +
+                        '4. 浏览器直接访问下方 URL 查看返回：<br>' +
+                        '<code style="word-break:break-all;">' + WORKER_URL + '/chat-logs?key=' + OWNER_KEY + '</code>' +
+                    '</div>' +
                 '</div>';
-        }).join('');
-
-        content.innerHTML = html;
+            console.error('[聊天记录] 加载失败:', e);
+        }
     }
 
     viewBtn.addEventListener('click', function() {
@@ -4065,11 +4063,20 @@ if (typeof module !== 'undefined' && module.exports) {
         if (e.target === modal) modal.style.display = 'none';
     });
 
-    clearBtn.addEventListener('click', function() {
-        if (!confirm('确定清空所有聊天记录吗？此操作不可恢复。')) return;
-        localStorage.removeItem('agnes_chat_logs');
-        renderLogs();
-        showToast('聊天记录已清空', 'success');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', renderLogs);
+    }
+
+    clearBtn.addEventListener('click', async function() {
+        if (!confirm('确定清空所有用户的聊天记录吗？此操作不可恢复。')) return;
+        try {
+            const res = await fetch(`${WORKER_URL}/chat-clear?key=${OWNER_KEY}`, { method: 'POST' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            await renderLogs();
+            showToast('所有用户聊天记录已清空', 'success');
+        } catch(e) {
+            showToast('清空失败: ' + e.message, 'error');
+        }
     });
 })();
 
@@ -4125,7 +4132,7 @@ if (typeof module !== 'undefined' && module.exports) {
             } else {
                 // 首次打开时加载 iframe（带版本号强制刷新）
                 if (!aiIframe.src || aiIframe.src.indexOf('v=') === -1) {
-                    aiIframe.src = 'ai.html?v=6';
+                    aiIframe.src = 'ai.html?v=8';
                 }
                 aiSidebar.classList.add('open');
             }

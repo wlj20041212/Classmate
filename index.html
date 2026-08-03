@@ -88,12 +88,13 @@
             </div>
         </section>
 
-    <!-- AI 聊天记录弹窗 -->
+    <!-- AI 聊天记录弹窗（读取所有用户 Cloudflare KV 数据） -->
     <div id="chatLogModal" class="chat-log-overlay" style="display:none;">
         <div class="chat-log-dialog">
             <div class="chat-log-header">
-                <h3>AI 聊天记录</h3>
+                <h3>所有用户的 AI 聊天记录</h3>
                 <div>
+                    <button id="refreshChatLogsBtn" class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;">🔄 刷新</button>
                     <button id="clearChatLogsBtn" class="btn btn-danger" style="font-size:0.85rem;padding:6px 14px;">清空记录</button>
                     <button id="closeChatLogBtn" class="close-button">✕</button>
                 </div>
