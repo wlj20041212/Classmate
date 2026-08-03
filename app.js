@@ -2348,6 +2348,9 @@ class AuthView {
         this.container.innerHTML = `
             <div class="auth-view owner-mode">
                 <span class="mode-label">模式: <strong style="color: #FFD700;">Owner</strong></span>
+                <button id="aiLogsButton" class="btn btn-secondary" title="查看所有用户的 AI 搜索记录" style="margin-right:8px;">
+                    AI 搜索记录
+                </button>
                 <button id="logoutButton" class="btn btn-secondary" title="退出 Owner 模式">
                     退出
                 </button>
@@ -2361,8 +2364,103 @@ class AuthView {
                 this.handleLogout();
             });
         }
+
+        // 绑定 AI 搜索记录按钮
+        const aiLogsButton = document.getElementById('aiLogsButton');
+        if (aiLogsButton) {
+            aiLogsButton.addEventListener('click', () => {
+                this.showAiSearchLogs();
+            });
+        }
         
         console.log('[AuthView] Owner 模式界面已渲染');
+    }
+
+    /**
+     * 显示 AI 搜索记录模态框（读取 Cloudflare KV 数据）
+     */
+    async showAiSearchLogs() {
+        // 创建模态框
+        const modal = document.createElement('div');
+        modal.id = 'aiLogsModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:12px;width:100%;max-width:720px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+                <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;">
+                    <h3 style="margin:0;font-size:16px;">所有用户的 AI 搜索记录</h3>
+                    <div style="display:flex;gap:8px;">
+                        <button id="refreshAiLogs" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:12px;">刷新</button>
+                        <button id="clearAiLogs" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fee;color:#c00;cursor:pointer;font-size:12px;">清空</button>
+                        <button id="closeAiLogs" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:14px;">关闭</button>
+                    </div>
+                </div>
+                <div id="aiLogsContent" style="flex:1;overflow-y:auto;padding:16px 20px;font-size:13px;color:#444;">
+                    <div style="text-align:center;color:#999;padding:40px 0;">加载中...</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const loadLogs = async () => {
+            const content = document.getElementById('aiLogsContent');
+            content.innerHTML = '<div style="text-align:center;color:#999;padding:40px 0;">加载中...</div>';
+            try {
+                const res = await fetch('https://lejiang-search.2252821948.workers.dev/logs?key=lejiang_owner_2024');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (!data.logs || data.logs.length === 0) {
+                    content.innerHTML = '<div style="text-align:center;color:#999;padding:40px 0;">暂无搜索记录</div>';
+                    return;
+                }
+                // 按时间倒序
+                const logs = data.logs.sort((a, b) => b.ts - a.ts);
+                content.innerHTML = logs.map(log => {
+                    const date = new Date(log.ts);
+                    const timeStr = date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+                    // 解析设备类型
+                    let device = '未知';
+                    const ua = log.ua || '';
+                    if (/mobile/i.test(ua)) device = '手机';
+                    else if (/tablet/i.test(ua)) device = '平板';
+                    else if (/windows|mac|linux/i.test(ua)) device = '电脑';
+                    return `
+                    <div style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                            <div style="flex:1;">
+                                <div style="font-weight:600;color:#2d2838;margin-bottom:4px;">${this.escapeHtml(log.raw || '(空)')}</div>
+                                <div style="font-size:11px;color:#999;">
+                                    <span style="background:#f0ede8;padding:1px 6px;border-radius:4px;margin-right:6px;">搜索词: ${this.escapeHtml(log.clean || '')}</span>
+                                    <span style="background:#e8f4fd;padding:1px 6px;border-radius:4px;margin-right:6px;">${device}</span>
+                                    <span>${timeStr}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                content.innerHTML = `<div style="text-align:center;color:#c00;padding:40px 0;">加载失败: ${e.message}<br><br>请确认 Worker 已部署 KV 并配置正确。</div>`;
+            }
+        };
+
+        document.getElementById('closeAiLogs').addEventListener('click', () => modal.remove());
+        document.getElementById('refreshAiLogs').addEventListener('click', loadLogs);
+        document.getElementById('clearAiLogs').addEventListener('click', async () => {
+            if (!confirm('确定要清空所有搜索记录吗？此操作不可恢复。')) return;
+            try {
+                await fetch('https://lejiang-search.2252821948.workers.dev/clear?key=lejiang_owner_2024', { method: 'POST' });
+                loadLogs();
+            } catch(e) { alert('清空失败: ' + e.message); }
+        });
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+        loadLogs();
+    }
+
+    escapeHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
     }
 
     /**
@@ -4025,9 +4123,9 @@ if (typeof module !== 'undefined' && module.exports) {
             if (aiSidebar.classList.contains('open')) {
                 aiSidebar.classList.remove('open');
             } else {
-                // 首次打开时加载 iframe
-                if (!aiIframe.src) {
-                    aiIframe.src = 'ai.html';
+                // 首次打开时加载 iframe（带版本号强制刷新）
+                if (!aiIframe.src || aiIframe.src.indexOf('v=') === -1) {
+                    aiIframe.src = 'ai.html?v=6';
                 }
                 aiSidebar.classList.add('open');
             }
@@ -4039,6 +4137,13 @@ if (typeof module !== 'undefined' && module.exports) {
             aiSidebar.classList.remove('open');
         });
     }
+
+    // 监听 iframe 内 AI 页面发来的"关闭侧边栏"消息
+    window.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'lejiang_close_ai_sidebar') {
+            aiSidebar.classList.remove('open');
+        }
+    });
 
     // 窗口尺寸变化时，如果在移动端则关闭侧边栏
     window.addEventListener('resize', () => {
