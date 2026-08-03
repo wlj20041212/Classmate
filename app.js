@@ -3908,3 +3908,116 @@ function showToast(message, type = 'info') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { showToast };
 }
+
+// ============== AI 聊天记录查看器 (Owner 模式) ==============
+
+(function() {
+    const viewBtn = document.getElementById('viewChatLogsBtn');
+    const modal = document.getElementById('chatLogModal');
+    const closeBtn = document.getElementById('closeChatLogBtn');
+    const clearBtn = document.getElementById('clearChatLogsBtn');
+    const content = document.getElementById('chatLogContent');
+
+    if (!viewBtn || !modal) return;
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function renderLogs() {
+        let logs = [];
+        try {
+            logs = JSON.parse(localStorage.getItem('agnes_chat_logs') || '[]');
+        } catch(e) { logs = []; }
+
+        if (logs.length === 0) {
+            content.innerHTML = '<p style="text-align:center;color:var(--text-faint);padding:40px 0;">暂无聊天记录</p>';
+            return;
+        }
+
+        // 最新的排最上面
+        logs.reverse();
+
+        const html = logs.map(function(log) {
+            var statusBadge = log.ok
+                ? '<span class="log-status log-ok">成功</span>'
+                : '<span class="log-status log-fail">失败</span>';
+            return '<div class="log-item">' +
+                '<div class="log-time">' + escapeHtml(log.t) + ' ' + statusBadge + '</div>' +
+                '<div class="log-q"><b>问:</b> ' + escapeHtml(log.q) + '</div>' +
+                '<div class="log-a"><b>答:</b> ' + escapeHtml(log.a) + '</div>' +
+                '</div>';
+        }).join('');
+
+        content.innerHTML = html;
+    }
+
+    viewBtn.addEventListener('click', function() {
+        renderLogs();
+        modal.style.display = 'flex';
+    });
+
+    closeBtn.addEventListener('click', function() {
+        modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    clearBtn.addEventListener('click', function() {
+        if (!confirm('确定清空所有聊天记录吗？此操作不可恢复。')) return;
+        localStorage.removeItem('agnes_chat_logs');
+        renderLogs();
+        showToast('聊天记录已清空', 'success');
+    });
+})();
+
+// ============== AI 助手浮动按钮 ==============
+
+(function() {
+    const aiBtn = document.getElementById('aiFloatBtn');
+    const aiSidebar = document.getElementById('aiSidebar');
+    const aiClose = document.getElementById('aiSidebarClose');
+    const aiIframe = document.getElementById('aiIframe');
+
+    if (!aiBtn) return;
+
+    // 判断是否为移动端
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+
+    aiBtn.addEventListener('click', () => {
+        if (isMobile()) {
+            // 手机端：跳转到 AI 页面
+            window.location.href = 'ai.html';
+        } else {
+            // 电脑端：展开侧边栏
+            if (aiSidebar.classList.contains('open')) {
+                aiSidebar.classList.remove('open');
+            } else {
+                // 首次打开时加载 iframe
+                if (!aiIframe.src) {
+                    aiIframe.src = 'ai.html';
+                }
+                aiSidebar.classList.add('open');
+            }
+        }
+    });
+
+    if (aiClose) {
+        aiClose.addEventListener('click', () => {
+            aiSidebar.classList.remove('open');
+        });
+    }
+
+    // 窗口尺寸变化时，如果在移动端则关闭侧边栏
+    window.addEventListener('resize', () => {
+        if (isMobile() && aiSidebar.classList.contains('open')) {
+            aiSidebar.classList.remove('open');
+        }
+    });
+})();
