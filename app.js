@@ -4200,7 +4200,7 @@ if (typeof module !== 'undefined' && module.exports) {
             } else {
                 // 首次打开时加载 iframe（带版本号强制刷新）
                 if (!aiIframe.src || aiIframe.src.indexOf('v=') === -1) {
-                    aiIframe.src = 'ai.html?v=12';
+                    aiIframe.src = 'ai.html?v=13';
                 }
                 aiSidebar.classList.add('open');
             }
