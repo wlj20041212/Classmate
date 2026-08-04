@@ -22,7 +22,7 @@ server:
 
 ui:
   static_use_hash: true
-  default_locale: "zh"
+  default_locale: ""
 
 # 禁用几个启动会报错的引擎
 engines:
