@@ -239,7 +239,7 @@
       <h1>乐江 AI</h1>
     </div>
     <div class="header-actions">
-      <button class="btn-search-toggle" id="searchToggle" onclick="toggleSearch()">🔍 联网</button>
+      <button class="btn-search-toggle" id="searchToggle" onclick="toggleSearch()" title="复杂问题可以试试联网搜索">🔍 联网</button>
       <button class="btn-clear" onclick="clearChat()">🗑 清空</button>
     </div>
   </div>
@@ -255,7 +255,7 @@
           <line x1="16" y1="16" x2="16" y2="16"/>
         </svg>
       </div>
-      <div class="msg-content">你好！👋 我是乐江 AI，有什么可以帮你的吗？</div>
+      <div class="msg-content">你好！👋 我是乐江 AI，有什么可以帮你的吗？<br><span style="font-size:11px;color:#9a93a8;display:inline-block;margin-top:4px;">💡 退出页面后对话会自动清空</span></div>
     </div>
   </div>
 
@@ -449,18 +449,53 @@ const SEARCH_WORKER_URL = 'https://api.wanglejiang.online';
 const SEARCH_LIMIT = 70;
 const SEARCH_COOLDOWN_MS = 60 * 60 * 1000;
 
-// 联网开关状态
-let searchEnabled = localStorage.getItem('lejiang_search_enabled') === 'true';
+// 联网开关状态（每次进入默认关闭，不读取上次状态）
+let searchEnabled = false;
+// SearXNG 预热状态（避免重复 ping）
+let searxngWarming = false;
+let searxngReady = false;
+
 function toggleSearch() {
   searchEnabled = !searchEnabled;
   localStorage.setItem('lejiang_search_enabled', searchEnabled);
   updateSearchToggleUI();
+  // 开启联网搜索时，立即预热 SearXNG（不阻塞用户）
+  if (searchEnabled && !searxngReady && !searxngWarming) {
+    warmupSearxng();
+  }
+}
+
+// 预热 SearXNG：发送一个轻量请求唤醒 Render 免费实例
+async function warmupSearxng() {
+  if (searxngWarming || searxngReady) return;
+  searxngWarming = true;
+  try {
+    // 通过 Worker 的 /ping 端点间接唤醒（Worker 会转发到 SearXNG）
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);  // 20 秒超时，Render 冷启动需要 30-50 秒
+    const res = await fetch(`${SEARCH_WORKER_URL}/ping`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.ok) {
+      searxngReady = true;
+      console.log('[乐江AI] SearXNG 预热完成');
+    }
+  } catch (e) {
+    console.warn('[乐江AI] SearXNG 预热失败（不影响搜索，会自动重试）:', e.message);
+  } finally {
+    searxngWarming = false;
+  }
 }
 function updateSearchToggleUI() {
   const btn = document.getElementById('searchToggle');
   if (btn) {
     btn.classList.toggle('active', searchEnabled);
     btn.textContent = searchEnabled ? '🔍 联网开' : '🔍 联网';
+  }
+  // 联网开启时提示用户用简洁关键词（搜索效果更好）
+  if (inputEl) {
+    inputEl.placeholder = searchEnabled
+      ? '输入消息，Enter 发送…（联网搜索用简洁词更准）'
+      : '输入消息，Enter 发送…';
   }
 }
 
@@ -852,6 +887,10 @@ async function sendMessage() {
 updateSearchToggleUI();
 inputEl.focus();
 ensureScroll();
+// 如果联网搜索已开启（localStorage 记忆），页面加载时自动预热 SearXNG
+if (searchEnabled) {
+  warmupSearxng();
+}
 </script>
 </body>
 </html>
