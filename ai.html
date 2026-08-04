@@ -836,7 +836,9 @@ async function sendMessage() {
       try { detail = JSON.parse(errBody); } catch(e) {}
       const code = detail?.code || res.status;
       const msg  = detail?.message || detail?.error?.message || errBody.slice(0, 300);
-      throw new Error(`[${code}] ${msg}`);
+      // 原始错误只记录到控制台，不暴露给用户（避免泄露底层模型信息）
+      console.error('[乐江AI] 接口错误:', `[${code}] ${msg}`);
+      throw new Error('繁忙');
     }
 
     const data = await res.json();
@@ -866,16 +868,13 @@ async function sendMessage() {
   } catch (err) {
     hideTyping();
     stopPoll();
+    // 原始错误只记录到控制台，不暴露给用户
     console.error('[乐江AI] 错误:', err);
-
-    let extra = '';
-    if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
-      extra = '\n\n可能原因：\n① 浏览器 CORS 拦截（Agnes 网关未对该来源开放）\n② 网络不通（确认能访问 api.agnes-ai.cn）\n③ Key 无效或过期\n\n建议：打开 F12 控制台查看红色报错，截图发我看。';
-    }
-
-    const el = addMessage('bot', `⚠️ 请求失败${extra}\n\n${err.message}`);
+    // 统一显示友好提示，不泄露底层信息
+    const friendlyMsg = '⚠️ 乐江AI繁忙，请稍后重试~';
+    const el = addMessage('bot', friendlyMsg);
     el.classList.add('error-msg');
-    saveChatLog(text, err.message, false);
+    saveChatLog(text, friendlyMsg, false);
   } finally {
     sendBtn.disabled = false;
     inputEl.focus();
