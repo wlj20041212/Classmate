@@ -3931,6 +3931,77 @@ if (typeof module !== 'undefined' && module.exports) {
         return d.innerHTML;
     }
 
+    // 解析 UA，返回 设备类型(OS·品牌) 格式，如 "电脑(Win10·Edge)" "手机(Android 14·HONOR)"
+    function parseDeviceInfo(ua) {
+        if (!ua) return '未知';
+        var type = '未知', os = '', brand = '';
+
+        if (/iPhone/i.test(ua)) {
+            type = '手机';
+            var im = ua.match(/iPhone OS\s+([\d_]+)/i);
+            os = im ? 'iOS ' + im[1].replace(/_/g, '.') : 'iOS';
+            brand = 'iPhone';
+        } else if (/iPad/i.test(ua)) {
+            type = '平板';
+            var im = ua.match(/OS\s+([\d_]+)/i);
+            os = im ? 'iPadOS ' + im[1].replace(/_/g, '.') : 'iPadOS';
+            brand = 'iPad';
+        } else if (/Android/i.test(ua)) {
+            type = /Mobile/i.test(ua) ? '手机' : '平板';
+            var am = ua.match(/Android\s+([\d\.]+)/i);
+            os = am ? 'Android ' + am[1] : 'Android';
+            // 从 Build/XXX 前的型号字段提取品牌
+            var bm = ua.match(/;\s*([^;)]+?)\s+Build\//i);
+            var model = bm ? bm[1].trim() : '';
+            // 从 Build/XXX 中也能识别（如 HONORLSA-AN00）
+            var buildStr = ua.match(/Build\/([^\);]+)/i);
+            buildStr = buildStr ? buildStr[1] : '';
+            if (/HONOR/i.test(model) || /HONOR/i.test(buildStr)) brand = 'HONOR';
+            else if (/HUAWEI|HW\-/i.test(model) || /HUAWEI/i.test(buildStr)) brand = '华为';
+            else if (/Mi\s|Redmi|POCO/i.test(model)) brand = '小米';
+            else if (/OPPO/i.test(model) || /^PG[A-Z]|^PJZ|^PCHM/i.test(model)) brand = 'OPPO';
+            else if (/vivo/i.test(model) || /^V[0-9]{4}/i.test(model)) brand = 'vivo';
+            else if (/SM\-[A-Z0-9]+/i.test(model)) brand = '三星';
+            else if (/ONEPLUS|IN20/i.test(model)) brand = '一加';
+            else if (/Realme/i.test(model)) brand = 'Realme';
+            else if (/PKP|PNP/i.test(model)) brand = '红米';
+            else if (model) brand = model;  // 识别不到就显示型号
+            else brand = 'Android';
+            if (brand !== model && model && !/^(HONOR|HUAWEI|HW-|OPPO|vivo|SM-|ONEPLUS|Realme|PKP|PNP|Mi\s|Redmi|POCO|PG|PJZ|PCHM|IN20|V[0-9]{4})/i.test(model)) {
+                // 是新品牌，添加型号作为参考
+                // 这里不添加，保持简洁
+            }
+        } else if (/Mac OS X|Macintosh/i.test(ua)) {
+            type = '电脑';
+            var mm = ua.match(/Mac OS X\s+([\d_]+)/i);
+            os = mm ? 'macOS ' + mm[1].replace(/_/g, '.') : 'macOS';
+            brand = 'Mac';
+            if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) brand += '(Safari)';
+            else if (/Chrome/i.test(ua)) brand += '(Chrome)';
+        } else if (/Windows NT 10/i.test(ua)) {
+            type = '电脑';
+            os = 'Win10/11';
+            if (/Edg/i.test(ua)) brand = 'Edge';
+            else if (/Chrome/i.test(ua)) brand = 'Chrome';
+            else if (/Firefox/i.test(ua)) brand = 'Firefox';
+        } else if (/Windows NT 6\.3/i.test(ua)) {
+            type = '电脑'; os = 'Win8.1';
+        } else if (/Windows NT 6\.1/i.test(ua)) {
+            type = '电脑'; os = 'Win7';
+        } else if (/Windows/i.test(ua)) {
+            type = '电脑'; os = 'Windows';
+        } else if (/Linux/i.test(ua)) {
+            type = '电脑'; os = 'Linux';
+        }
+
+        var out = type;
+        var extras = [];
+        if (os) extras.push(os);
+        if (brand) extras.push(brand);
+        if (extras.length) out += '(' + extras.join('·') + ')';
+        return out;
+    }
+
     async function renderLogs() {
         // 顶部状态栏 + 加载动画
         content.innerHTML = `
@@ -3991,15 +4062,11 @@ if (typeof module !== 'undefined' && module.exports) {
                         ? '<span class="log-status log-fail">失败</span>'
                         : '<span class="log-status log-ok">成功</span>';
                     var timeStr = log.t || (log.ts ? new Date(log.ts).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未知时间');
-                    // 解析设备类型
-                    var device = '未知';
-                    var ua = log.ua || '';
-                    if (/mobile/i.test(ua)) device = '手机';
-                    else if (/tablet/i.test(ua)) device = '平板';
-                    else if (/windows|mac|linux/i.test(ua)) device = '电脑';
+                    // 解析设备类型 + 品牌 + 操作系统
+                    var device = parseDeviceInfo(log.ua || '');
                     return '<div class="log-item">' +
                         '<div class="log-time">' + escapeHtml(timeStr) + ' ' + statusBadge +
-                        ' <span style="background:#e8f4fd;padding:1px 6px;border-radius:4px;font-size:11px;color:#444;">' + device + '</span></div>' +
+                        ' <span style="background:#e8f4fd;padding:1px 6px;border-radius:4px;font-size:11px;color:#444;">' + escapeHtml(device) + '</span></div>' +
                         '<div class="log-q"><b>问:</b> ' + escapeHtml(log.q || '') + '</div>' +
                         '<div class="log-a"><b>答:</b> ' + escapeHtml(log.a || '') + '</div>' +
                         '</div>';
