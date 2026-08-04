@@ -3947,7 +3947,8 @@ if (typeof module !== 'undefined' && module.exports) {
             os = im ? 'iPadOS ' + im[1].replace(/_/g, '.') : 'iPadOS';
             brand = 'iPad';
         } else if (/Android/i.test(ua)) {
-            type = /Mobile/i.test(ua) ? '手机' : '平板';
+            // Android 平板 UA 通常含 "Tablet" 字样；手机 WebView 可能不含 "Mobile"，默认按手机处理
+            type = /Tablet/i.test(ua) ? '平板' : '手机';
             var am = ua.match(/Android\s+([\d\.]+)/i);
             os = am ? 'Android ' + am[1] : 'Android';
             // 从 Build/XXX 前的型号字段提取品牌
