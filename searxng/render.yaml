@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: searxng-lejiang
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    port: 8080
+    envVars:
+      - key: SEARXNG_SECRET
+        value: lejiang_searxng_2024_secret_key_abc123def456
+      - key: SEARXNG_BASE_URL
+        value: https://searxng-lejiang.onrender.com/

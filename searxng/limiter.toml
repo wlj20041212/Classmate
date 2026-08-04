@@ -1,0 +1,7 @@
+# 空配置，禁用 bot detection 避免误拦截
+[botdetection.ip_limit]
+link_token = false
+
+[botdetection.ip_lists]
+pass_ip = []
+block_ip = []

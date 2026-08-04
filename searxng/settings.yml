@@ -1,0 +1,32 @@
+use_default_settings: true
+
+general:
+  instance_name: "Lejiang Search"
+  debug: false
+  contact_url: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "zh"
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "lejiang_searxng_2024_secret_key_abc123def456"
+  bind_address: "0.0.0.0"
+  port: 8080
+  limiter: false
+  image_proxy: true
+  public_instance: true
+
+ui:
+  static_use_hash: true
+  default_locale: "zh"
+
+# 关闭几个会报错的引擎，避免启动失败
+outgoing:
+  request_timeout: 10
+  max_request_timeout: 15
+  useragent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
