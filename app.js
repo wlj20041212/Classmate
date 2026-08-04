@@ -3921,7 +3921,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
     if (!viewBtn || !modal) return;
 
-    const WORKER_URL = 'https://api.wanglejiang.online';
+    const WORKER_URL = 'https://api.wanglejiang.top';
     const OWNER_KEY = 'lejiang_owner_2024';
 
     function escapeHtml(s) {
@@ -4200,7 +4200,7 @@ if (typeof module !== 'undefined' && module.exports) {
             } else {
                 // 首次打开时加载 iframe（带版本号强制刷新）
                 if (!aiIframe.src || aiIframe.src.indexOf('v=') === -1) {
-                    aiIframe.src = 'ai.html?v=14.3';
+                    aiIframe.src = 'ai.html?v=14.4';
                 }
                 aiSidebar.classList.add('open');
             }
