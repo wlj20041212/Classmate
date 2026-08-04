@@ -3921,7 +3921,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
     if (!viewBtn || !modal) return;
 
-    const WORKER_URL = 'https://lejiang-search.2252821948.workers.dev';
+    const WORKER_URL = 'https://api.wanglejiang.online';
     const OWNER_KEY = 'lejiang_owner_2024';
 
     function escapeHtml(s) {
