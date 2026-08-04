@@ -19,7 +19,7 @@ server:
   port: 8080
   limiter: false
   image_proxy: true
-  public_instance: true
+  public_instance: false
 
 ui:
   static_use_hash: true
