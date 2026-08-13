@@ -2810,9 +2810,11 @@ async function initGestureRecognition() {
     showGestureProgress(0, '准备下载...', '0 / ' + formatSize(11000000));
 
     try {
-        // 本地路径优先，CDN 作为 fallback
+        // 国内CDN优先（npmmirror阿里云镜像国内最快），本地和海外CDN作为fallback
         const LOCAL_BASE = './mediapipe/';
         const SOURCES = [
+            { url: 'https://registry.npmmirror.com/@mediapipe/hands/0.4.1646424915/files/hands.js', base: 'https://registry.npmmirror.com/@mediapipe/hands/0.4.1646424915/files/', name: 'npmmirror国内' },
+            { url: 'https://npm.elemecdn.com/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://npm.elemecdn.com/@mediapipe/hands@0.4.1646424915/', name: 'elemecdn国内' },
             { url: LOCAL_BASE + 'hands.js', base: LOCAL_BASE, name: '本地' },
             { url: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/', name: 'jsdelivr' },
             { url: 'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/', name: 'fastly' },
@@ -2822,10 +2824,13 @@ async function initGestureRecognition() {
         let handsReady = false;
         for (const src of SOURCES) {
             try {
-                // 预下载模型文件（带进度显示），只有本地源可以预下载
-                // CDN 源不支持跨域 fetch 流式读取，跳过预下载，让 MediaPipe 内部自己加载
-                if (src.base === LOCAL_BASE) {
+                // 预下载模型文件（带进度显示），所有支持CORS的源都尝试预下载
+                // 如果预下载失败（CORS不支持），降级为MediaPipe内部加载（无进度条但能工作）
+                try {
                     await prefetchMediaPipeFiles(src.base);
+                } catch (prefetchErr) {
+                    console.warn('[手势] 预下载失败，改用MediaPipe内部加载:', src.name, prefetchErr.message);
+                    showGestureProgress(50, '正在加载手势模型...', '进度不可用');
                 }
 
                 console.log('[手势] 尝试加载 hands.js:', src.name);
