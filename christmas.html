@@ -2643,84 +2643,117 @@ async function loadMediaPipeScript(src) {
     });
 }
 
+// 手势引擎加载提示UI
+function showGestureLoading(text) {
+    let el = document.getElementById('gestureEngineLoading');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'gestureEngineLoading';
+        el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(20,10,40,0.92);color:#fff;padding:24px 36px;border-radius:16px;z-index:9500;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);backdrop-filter:blur(8px);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;';
+        el.innerHTML = '<div id="gestureLoadingText" style="font-size:16px;margin-bottom:12px;">正在加载手势引擎...</div><div style="width:40px;height:40px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:gestureSpin 0.8s linear infinite;margin:0 auto;"></div><style>@keyframes gestureSpin{to{transform:rotate(360deg)}}</style>';
+        document.body.appendChild(el);
+    }
+    const textEl = document.getElementById('gestureLoadingText');
+    if (textEl && text) textEl.textContent = text;
+    el.style.display = 'block';
+}
+function hideGestureLoading() {
+    const el = document.getElementById('gestureEngineLoading');
+    if (el) el.style.display = 'none';
+}
+
 // 初始化手势识别（摄像头成功后调用）
 async function initGestureRecognition() {
     if (gestureDetectorActive) return; // 避免重复初始化
-    // cameraVideo 在 module scope，这里用 getElementById 获取
     const camVideo = document.getElementById('camera_video');
     if (!camVideo || camVideo.readyState < 2) {
         console.warn('[手势] 视频未就绪，稍后重试, readyState:', camVideo ? camVideo.readyState : 'no video');
         setTimeout(initGestureRecognition, 1000);
         return;
     }
+
+    // 显示加载提示
+    showGestureLoading('正在加载手势引擎...');
+
     try {
         // 加载 MediaPipe Hands：本地文件优先（100%稳定），CDN 作为 fallback
-        // 本地文件随仓库部署在 GitHub Pages 上，不依赖第三方 CDN，多人访问无影响
         const LOCAL_BASE = './mediapipe/';
-        const CDN_LIST = [
-            LOCAL_BASE + 'hands.js',
-            'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js',
-            'https://unpkg.com/@mediapipe/hands@0.4.1646424915/hands.js',
-            'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js',
+        const SOURCES = [
+            { url: LOCAL_BASE + 'hands.js', base: LOCAL_BASE, name: '本地' },
+            { url: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/', name: 'jsdelivr' },
+            { url: 'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/', name: 'fastly' },
+            { url: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/', name: 'unpkg' },
         ];
-        let loaded = false;
-        let loadedBase = LOCAL_BASE; // locateFile 默认用本地
-        for (const cdn of CDN_LIST) {
+
+        let handsReady = false;
+        for (const src of SOURCES) {
             try {
-                console.log('[手势] 尝试加载:', cdn);
-                await loadMediaPipeScript(cdn);
-                if (window.Hands) {
-                    loaded = true;
-                    console.log('[手势] 加载成功:', cdn);
-                    // 如果是本地路径加载成功，locateFile 用本地；否则用对应 CDN 基址
-                    if (cdn.startsWith('http')) {
-                        loadedBase = cdn.replace(/hands\.js.*$/, '');
-                    }
-                    break;
-                }
+                console.log('[手势] 尝试加载 hands.js:', src.name, src.url);
+                // loadMediaPipeScript 内部已处理 window.Hands 已存在的情况
+                await loadMediaPipeScript(src.url);
+                if (!window.Hands) continue;
+
+                showGestureLoading('正在加载手势模型（约11MB）...');
+
+                // 创建 Hands 实例
+                const instance = new Hands({
+                    locateFile: (file) => src.base + file
+                });
+                instance.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 0,
+                    minDetectionConfidence: 0.6,
+                    minTrackingConfidence: 0.5
+                });
+                instance.onResults(onHandResults);
+
+                // 预热验证：发送一帧测试帧，确认 WASM 模型真正加载成功
+                console.log('[手势] 预热验证中（等待WASM模型下载）...');
+                const warmupCanvas = document.createElement('canvas');
+                warmupCanvas.width = 64;
+                warmupCanvas.height = 48;
+                const warmupCtx = warmupCanvas.getContext('2d');
+                warmupCtx.fillStyle = '#000';
+                warmupCtx.fillRect(0, 0, 64, 48);
+
+                await Promise.race([
+                    instance.send({ image: warmupCanvas }),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('预热超时(30s)')), 30000))
+                ]);
+
+                // 预热成功！模型可用
+                handsInstance = instance;
+                gestureDetectorActive = true;
+                handsReady = true;
+                console.log('[手势] MediaPipe Hands 加载并预热成功（来源:', src.name, '）');
+                break;
             } catch (e) {
-                console.warn('[手势] 加载失败:', cdn, e.message);
+                console.warn('[手势] 加载失败:', src.name, e.message);
+                // 清理失败的实例
+                try { if (typeof instance !== 'undefined' && instance) instance.close && instance.close(); } catch(_) {}
             }
         }
-        if (!loaded || !window.Hands) {
-            throw new Error('所有 hands.js 加载失败（本地+CDN）');
+
+        if (!handsReady || !handsInstance) {
+            throw new Error('所有手势引擎源均加载失败');
         }
 
-        // locateFile 指向实际加载成功的基址（本地优先）
-        handsInstance = new Hands({
-            locateFile: (file) => loadedBase + file
-        });
-        handsInstance.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 0,       // 精简模式，移动端性能更好
-            minDetectionConfidence: 0.6,
-            minTrackingConfidence: 0.5
-        });
-        handsInstance.onResults(onHandResults);
-        gestureDetectorActive = true;
-        // 每 150ms 送一帧检测，平衡性能与响应速度
+        // 加载成功，隐藏提示
+        hideGestureLoading();
+        // 开始检测循环
         detectLoop();
         console.log('[手势] MediaPipe Hands 初始化完成，开始检测');
         // 显示首次引导气泡
         showTutorialBubble();
-        // 绑定关闭按钮
         const closeBtn = document.getElementById('tutorialClose');
         if (closeBtn) closeBtn.addEventListener('click', hideTutorialBubble);
-        // 启动无手势检测计时器
         startNoGestureTimer();
     } catch (err) {
         console.error('[手势] 初始化失败:', err);
-        // 显示用户可见的提示
-        setNoGestureText('⚠️ 在线手势引擎加载失败，切换本地引擎...');
+        hideGestureLoading();
+        // 不降级到不准确的本地肤色检测，直接提示用户
+        setNoGestureText('⚠️ 手势引擎加载失败，请刷新页面重试');
         showNoGestureHint();
-        // MediaPipe 加载失败，自动启动纯本地检测（不依赖外部库）
-        console.log('[手势] 自动切换到本地检测引擎');
-        initLocalGestureDetection();
-        // 3 秒后隐藏提示，继续显示随机演示提示
-        setTimeout(() => {
-            hideNoGestureHint();
-            startNoGestureTimer();
-        }, 3000);
     }
 }
 
@@ -2763,16 +2796,16 @@ async function detectLoop() {
     }
 }
 
-// 降级到本地手势引擎（MediaPipe 不可用时调用）
+// 降级处理（MediaPipe 运行中不可用时调用）
+// 不再降级到不准确的本地肤色检测，避免乱触发
 function degradeToLocalEngine() {
     detectDegraded = true;
     gestureDetectorActive = false;
     try { if (handsInstance) handsInstance.close && handsInstance.close(); } catch(e) {}
     handsInstance = null;
-    setNoGestureText('⚠️ 手势引擎自动切换为本地模式...');
+    console.error('[手势] MediaPipe 运行中失效，停止检测（不降级到肤色检测以避免误触发）');
+    setNoGestureText('⚠️ 手势引擎运行中失效，请刷新页面重试');
     showNoGestureHint();
-    initLocalGestureDetection();
-    setTimeout(() => { hideNoGestureHint(); }, 3000);
 }
 
 // ====== 本地手势检测（纯Canvas + 肤色检测，不依赖任何外部库）======
