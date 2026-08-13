@@ -859,7 +859,30 @@ const soundManager = new SoundManager();
     
     // 验证通过，立即初始化场景并显示静态圣诞树（不启动动画）
     initStaticScene();
-    
+
+    // 立即绑定指令面板折叠事件（不依赖摄像头，确保用户随时可折叠）
+    (function bindPanelToggle() {
+        const hdr = document.getElementById('panel-header');
+        const pnl = document.getElementById('instruction-panel');
+        if (hdr && pnl && !window._panelToggleBound) {
+            window._panelToggleBound = true;
+            const toggle = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                pnl.classList.toggle('collapsed');
+            };
+            hdr.addEventListener('click', toggle);
+            hdr.addEventListener('touchend', toggle);
+            console.log('[面板] 折叠事件已绑定');
+        }
+    })();
+
+    // 立即启动无手势提示计时（即使摄像头未授权也会提示用户）
+    if (typeof startNoGestureTimer === 'function') {
+        startNoGestureTimer();
+        console.log('[提示] 无手势提示计时器已启动');
+    }
+
     // 移动端浏览器（特别是QQ浏览器）必须在用户交互后才能请求摄像头权限
     // 显示提示，等待用户点击
     setupCameraPermissionRequest();
@@ -927,7 +950,8 @@ function init() {
     
     const panelHeader = document.getElementById('panel-header');
     const panel = document.getElementById('instruction-panel');
-    if(panelHeader && panel) {
+    if(panelHeader && panel && !window._panelToggleBound) {
+        window._panelToggleBound = true;
         const togglePanel = (e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -935,6 +959,7 @@ function init() {
         };
         panelHeader.addEventListener('click', togglePanel);
         panelHeader.addEventListener('touchend', togglePanel);
+        console.log('[面板] 折叠事件已在 init() 中绑定');
         // 默认展开，不再自动收起
     }
 
