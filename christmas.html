@@ -652,10 +652,10 @@ window.UploadHelper = UploadHelper;
             <li><span class="key-icon">👌</span> <b>OK手势</b>: 播放/暂停 音乐</li>
             <li><span class="key-icon">👍</span> <b>竖大拇指</b>: 圣诞树充能</li>
             <li><span class="key-icon">🤙</span> <b>666手势</b>: 切换主题配色</li>
-            <li><span class="key-icon">🤏</span> <b>捏取手势</b>: 召唤暴风雪</li>
-            <li><span class="key-icon">🤟</span> <b>三指枪</b>: 彩虹雪花模式</li>
-            <li><span class="key-icon">🔫</span> <b>手枪手势</b>: 魔法光绘/轨迹</li>
-            <li><span class="key-icon">🤘</span> <b>摇滚礼</b>: 漫天爱心雨</li>
+            <li><span class="key-icon">✊</span> <b>握拳</b>: 召唤暴风雪</li>
+            <li><span class="key-icon">✌️</span> <b>剪刀手</b>: 彩虹雪花模式</li>
+            <li><span class="key-icon">☝️</span> <b>食指</b>: 魔法光绘/轨迹</li>
+            <li><span class="key-icon">🖖</span> <b>四指并拢</b>: 漫天爱心雨</li>
         </ul>
     </div>
 
@@ -2778,12 +2778,11 @@ function detectGestureLocal(imageData) {
     const longRays = rayLengths.filter(l => l > avgLen * 1.5 && l > 12).length;
 
     // 4. 根据长射线数量映射手势（简化版本地检测）
-    // longRays ≈ 伸出的手指数量
-    if (longRays >= 5) return 'open';    // ✋ 5指 → 张开手掌
-    if (longRays === 1) return 'thumb';  // 👍 1指 → 竖大拇指
-    if (longRays === 2) return 'call';   // 🤙 2指 → 666
-    if (longRays === 3) return 'three';  // 🤟 3指 → 三指枪
-    if (longRays === 0) return 'pinch';  // 🤏 0指（握拢）→ 捏取
+    if (longRays >= 5) return 'open';    // ✋ 张开手掌
+    if (longRays === 0) return 'fist';   // ✊ 握拳
+    if (longRays === 1) return 'point';  // ☝️ 食指
+    if (longRays === 2) return 'peace';  // ✌️ 剪刀手
+    if (longRays >= 4) return 'four';    // 🖖 四指并拢
     return null;
 }
 // ====== 本地手势检测结束 ======
@@ -2800,41 +2799,57 @@ function onHandResults(results) {
     }
 }
 
-// 判断五指是否伸直（用指尖到手腕距离 vs 指根到手腕距离，不受手部方向影响）
+// 判断五指是否伸直（关节弯曲角度法，不受手部方向/旋转/大小影响）
 function getFingersUp(lm) {
-    const w = lm[0];
-    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
     const f = [0, 0, 0, 0, 0];
-    // 拇指：tip(4) 离手腕 > mcp(2) 离手腕 *1.15
-    f[0] = dist(lm[4], w) > dist(lm[2], w) * 1.15 ? 1 : 0;
-    // 食指：tip(8) > pip(5)*1.1
-    f[1] = dist(lm[8], w) > dist(lm[5], w) * 1.1 ? 1 : 0;
-    // 中指：tip(12) > pip(9)*1.1
-    f[2] = dist(lm[12], w) > dist(lm[9], w) * 1.1 ? 1 : 0;
-    // 无名指：tip(16) > pip(13)*1.1
-    f[3] = dist(lm[16], w) > dist(lm[13], w) * 1.1 ? 1 : 0;
-    // 小拇指：tip(20) > pip(17)*1.1
-    f[4] = dist(lm[20], w) > dist(lm[17], w) * 1.1 ? 1 : 0;
+
+    // 计算关节弯曲角度（顶点在b），返回角度（度）
+    // 三点接近共线=180度，弯曲时角度变小
+    function jointAngle(a, b, c) {
+        const ab = { x: a.x - b.x, y: a.y - b.y };
+        const cb = { x: c.x - b.x, y: c.y - b.y };
+        const dot = ab.x * cb.x + ab.y * cb.y;
+        const magAB = Math.hypot(ab.x, ab.y);
+        const magCB = Math.hypot(cb.x, cb.y);
+        if (magAB < 0.0001 || magCB < 0.0001) return 180;
+        const cos = Math.max(-1, Math.min(1, dot / (magAB * magCB)));
+        return Math.acos(cos) * 180 / Math.PI;
+    }
+
+    // 食指~小指：PIP关节角度，伸直 > 150度
+    // 食指: mcp(5)-pip(6)-tip(8)
+    f[1] = jointAngle(lm[5], lm[6], lm[8]) > 150 ? 1 : 0;
+    // 中指: mcp(9)-pip(10)-tip(12)
+    f[2] = jointAngle(lm[9], lm[10], lm[12]) > 150 ? 1 : 0;
+    // 无名指: mcp(13)-pip(14)-tip(16)
+    f[3] = jointAngle(lm[13], lm[14], lm[16]) > 150 ? 1 : 0;
+    // 小拇指: mcp(17)-pip(18)-tip(20)
+    f[4] = jointAngle(lm[17], lm[18], lm[20]) > 150 ? 1 : 0;
+
+    // 拇指：cmc(1)-mcp(2)-ip(4) 角度 + 拇指外展距离辅助
+    const thumbAngle = jointAngle(lm[1], lm[2], lm[4]);
+    const thumbLen = Math.hypot(lm[4].x - lm[2].x, lm[4].y - lm[2].y);
+    const palmW = Math.hypot(lm[5].x - lm[17].x, lm[5].y - lm[17].y); // 掌宽
+    f[0] = (thumbAngle > 150 && thumbLen > palmW * 0.55) ? 1 : 0;
+
     return f;
 }
 
-// 识别手势名称（8种国际通用手势，区分度高）
+// 识别手势名称（8种手势，finger key 差异最大）
 function detectGesture(lm) {
     const f = getFingersUp(lm);
     const key = f.join('');
     // OK 手势：拇指尖(4)与食指尖(8)距离很近，其余三指伸直
     const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
     if (pinchDist < 0.06 && f[2] && f[3] && f[4]) return 'ok';
-    // 捏取手势：拇指尖(4)与中指尖(12)距离很近，其余手指伸直
-    const pinchMidDist = Math.hypot(lm[4].x - lm[12].x, lm[4].y - lm[12].y);
-    if (pinchMidDist < 0.07 && f[1] && f[3] && f[4]) return 'pinch';
     switch (key) {
         case '11111': return 'open';    // ✋ 张开手掌（保留）
+        case '00000': return 'fist';    // ✊ 握拳
         case '10000': return 'thumb';   // 👍 竖大拇指（保留）
         case '10001': return 'call';    // 🤙 666手势（保留）
-        case '01110': return 'three';   // 🤟 三指枪（食指+中指+无名指）
-        case '11000': return 'pistol';  // 🔫 手枪（拇指+食指）
-        case '01001': return 'rock';    // 🤘 摇滚礼（食指+小拇指）
+        case '01100': return 'peace';   // ✌️ 剪刀手
+        case '01000': return 'point';   // ☝️ 食指
+        case '01111': return 'four';    // 🖖 四指并拢（无拇指）
         default: return null;
     }
 }
@@ -2863,22 +2878,22 @@ function triggerGestureEffect(gesture) {
             w.updateTreeTheme();
             w.showFeedback("🎨 主题: " + w.THEMES[w.state.themeIndex].name);
         },
-        'pinch':  () => {                                                     // 🤏 捏取手势 → 召唤暴风雪（新）
+        'fist':   () => {                                                     // ✊ 握拳 → 召唤暴风雪
             w.state.blizzardMode = true;
             w.soundManager.playEffect('wind');
             w.showFeedback("🌪️ 暴风雪!");
             setTimeout(() => { w.state.blizzardMode = false; }, 2000);
         },
-        'three':  () => {                                                     // 🤟 三指枪 → 彩虹雪花（新）
+        'peace':  () => {                                                     // ✌️ 剪刀手 → 彩虹雪花
             w.state.rainbowMode = !w.state.rainbowMode;
             w.soundManager.playEffect('switch');
             w.showFeedback(w.state.rainbowMode ? "🌈 彩虹模式" : "❄️ 纯净模式");
         },
-        'pistol': () => {                                                     // 🔫 手枪 → 魔法光绘（新）
+        'point':  () => {                                                     // ☝️ 食指 → 魔法光绘
             w.updateMagicTrail(new w.THREE.Vector3(0, 10, 0));
             w.showFeedback("✨ 魔法光绘");
         },
-        'rock':   () => {                                                     // 🤘 摇滚礼 → 漫天爱心雨（新）
+        'four':   () => {                                                     // 🖖 四指并拢 → 漫天爱心雨
             w.showFeedback("❤️ 圣诞快乐");
             w.soundManager.playEffect('magic');
             for (let i = 0; i < 5; i++) {
