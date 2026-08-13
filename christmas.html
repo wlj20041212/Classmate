@@ -2647,7 +2647,7 @@ async function loadMediaPipeScript(src) {
 // 预下载的文件 blob URL 映射：filename -> blobUrl
 const mediaPipeBlobs = {};
 // 已知文件大小（字节），用于进度计算
-// 注意：tflite不在此列表中，不预下载，由MediaPipe运行时从本地加载（同源快，不拖累进度条）
+// 阶段1：核心文件（快，11MB，进度条显示）
 const MP_FILE_SIZES = {
     'hands.binarypb': 550,
     'hands_solution_packed_assets_loader.js': 8400,
@@ -2655,6 +2655,9 @@ const MP_FILE_SIZES = {
     'hands_solution_packed_assets.data': 4327000,
     'hands_solution_simd_wasm_bin.wasm': 6293000,
 };
+// 阶段2：模型文件（2MB，后台下载，不进主进度条）
+const MP_MODEL_FILE = 'hand_landmark_lite.tflite';
+const MP_MODEL_SIZE = 2071000;
 
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -2799,7 +2802,53 @@ async function prefetchMediaPipeFiles(base) {
 
     // 停止平滑定时器，确保显示100%
     clearInterval(smoothTimer);
-    showGestureProgress(100, '加载完成', '');
+    showGestureProgress(100, '核心文件加载完成', '');
+}
+
+// 阶段2：下载tflite模型文件（2MB，独立进度，存入Cache Storage）
+async function prefetchModelFile(base) {
+    const file = MP_MODEL_FILE;
+
+    // 1. 先检查内存
+    if (mediaPipeBlobs[file]) {
+        console.log('[手势] tflite已在内存');
+        return;
+    }
+
+    // 2. 检查 Cache Storage
+    let cache = null;
+    try {
+        cache = await caches.open('mediapipe-hands-v1');
+        if (cache) {
+            const cached = await cache.match(base + file);
+            if (cached) {
+                const blob = await cached.blob();
+                mediaPipeBlobs[file] = URL.createObjectURL(blob);
+                console.log('[手势] tflite缓存命中');
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn('[手势] Cache Storage 不可用:', e.message);
+    }
+
+    // 3. 网络下载
+    console.log('[手势] 下载tflite模型:', base + file);
+    const response = await fetch(base + file);
+    if (!response.ok) throw new Error('tflite下载失败: HTTP ' + response.status);
+
+    const blob = await response.blob();
+    mediaPipeBlobs[file] = URL.createObjectURL(blob);
+
+    // 存入缓存
+    if (cache) {
+        try {
+            await cache.put(base + file, new Response(blob));
+            console.log('[手势] tflite已缓存');
+        } catch (e) {
+            console.warn('[手势] tflite缓存写入失败:', e.message);
+        }
+    }
 }
 
 // 初始化手势识别（摄像头成功后调用）
@@ -2827,28 +2876,39 @@ async function initGestureRecognition() {
             { url: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/', name: 'unpkg', canPrefetch: false },
         ];
 
+        // ====== 阶段1：下载核心5个文件（11MB，快，有进度条） ======
+        for (const src of SOURCES) {
+            if (src.canPrefetch) {
+                try {
+                    await prefetchMediaPipeFiles(src.base);
+                    break; // 本地预下载成功即可
+                } catch (e) {
+                    console.warn('[手势] 本地预下载失败:', e.message);
+                }
+            }
+        }
+
+        // ====== 阶段2：下载tflite模型文件（2MB，显示独立进度） ======
+        // 先下载tflite，再创建Hands实例（否则setOptions会触发加载404等待）
+        const modelSrc = SOURCES.find(s => s.canPrefetch) || SOURCES[0];
+        showGestureProgress(100, '正在下载手势模型...', formatSize(MP_MODEL_SIZE));
+        try {
+            await prefetchModelFile(modelSrc.base);
+            console.log('[手势] tflite模型文件下载完成');
+        } catch (e) {
+            console.warn('[手势] tflite下载失败，将依赖MediaPipe内部加载:', e.message);
+        }
+
+        // ====== 阶段3：加载hands.js并创建实例 ======
         let handsReady = false;
         for (const src of SOURCES) {
             try {
-                // 只有本地源预下载（同源无CORS问题，有准确进度条）
-                // CDN源跳过预下载，让MediaPipe内部加载WASM（无进度条但更可靠）
-                if (src.canPrefetch) {
-                    await prefetchMediaPipeFiles(src.base);
-                } else {
-                    // CDN源：检查是否已有本地预下载的blob可用
-                    const hasBlobs = Object.keys(mediaPipeBlobs).length > 0;
-                    if (!hasBlobs) {
-                        // 没有预下载blob，MediaPipe将内部加载，无法显示进度
-                        showGestureProgress(50, '正在从CDN加载手势模型...', '进度不可用');
-                    }
-                }
-
                 console.log('[手势] 尝试加载 hands.js:', src.name);
                 await loadMediaPipeScript(src.url);
                 if (!window.Hands) continue;
 
                 // 创建 Hands 实例
-                // locateFile 优先返回预下载的 blob URL（本地源），否则返回原始URL
+                // locateFile 优先返回预下载的 blob URL，否则返回原始URL
                 const instance = new Hands({
                     locateFile: (file) => mediaPipeBlobs[file] || (src.base + file)
                 });
@@ -2860,12 +2920,11 @@ async function initGestureRecognition() {
                 });
                 instance.onResults(onHandResults);
 
-                // 立即启用，不阻塞等待预热（预热在detectLoop首帧自动完成）
-                // 这样100%后立即进入页面，WASM编译推理引擎在后台进行
+                // 立即启用
                 handsInstance = instance;
                 gestureDetectorActive = true;
                 handsReady = true;
-                console.log('[手势] MediaPipe Hands 加载成功（来源:', src.name, '），预热将在后台进行');
+                console.log('[手势] MediaPipe Hands 加载成功（来源:', src.name, '）');
                 break;
             } catch (e) {
                 console.warn('[手势] 加载失败:', src.name, e.message);
