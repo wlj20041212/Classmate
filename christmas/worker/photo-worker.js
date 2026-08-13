@@ -106,7 +106,7 @@ export default {
                 type: k.metadata?.type || 'image/jpeg',
                 size: k.metadata?.size || 0,
                 time: k.metadata?.timestamp || 0,
-                time_str: k.metadata?.timestamp ? new Date(k.metadata.timestamp).toLocaleString('zh-CN') : '',
+                time_str: k.metadata?.timestamp ? new Date(k.metadata.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '',
             }));
             return json({ success: true, count: items.length, items });
         }
@@ -134,7 +134,7 @@ export default {
             const pwdParam = VIEW_PASSWORD ? `?pwd=${encodeURIComponent(VIEW_PASSWORD)}` : '';
             const cells = list.keys.map(k => {
                 const meta = k.metadata || {};
-                const timeStr = meta.timestamp ? new Date(meta.timestamp).toLocaleString('zh-CN') : '';
+                const timeStr = meta.timestamp ? new Date(meta.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '';
                 const sizeKB = meta.size ? (meta.size / 1024).toFixed(1) + ' KB' : '';
                 const del = `/api/delete${pwdParam}&key=${encodeURIComponent(k.name)}`;
                 return (

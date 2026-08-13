@@ -925,9 +925,13 @@ function init() {
     const panelHeader = document.getElementById('panel-header');
     const panel = document.getElementById('instruction-panel');
     if(panelHeader && panel) {
-        panelHeader.addEventListener('click', () => {
+        const togglePanel = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
             panel.classList.toggle('collapsed');
-        });
+        };
+        panelHeader.addEventListener('click', togglePanel);
+        panelHeader.addEventListener('touchend', togglePanel);
         // 默认展开，不再自动收起
     }
 
@@ -2475,23 +2479,20 @@ function hideNoGestureHint() {
     el.style.transform = 'translateX(-50%) translateY(8px)';
 }
 
-// 启动无手势检测计时器（8 秒无手势 → 提示随机演示）
+// 启动无手势检测计时器（6 秒无手势 → 提示随机演示）
 function startNoGestureTimer() {
     if (noGestureTimer) clearTimeout(noGestureTimer);
     noGestureTimer = setTimeout(() => {
-        // 只在从未检测到手势时提示
-        if (!gestureEverDetected) {
-            showNoGestureHint();
-        }
-    }, 8000);
+        showNoGestureHint();
+    }, 6000);
 }
 function resetNoGestureTimer() {
     hideNoGestureHint();
     if (noGestureTimer) clearTimeout(noGestureTimer);
-    // 手势触发后，10 秒内无新手势才再次提示
+    // 手势触发后，6 秒内无新手势才再次提示
     noGestureTimer = setTimeout(() => {
-        if (!gestureEverDetected) showNoGestureHint();
-    }, 10000);
+        showNoGestureHint();
+    }, 6000);
 }
 
 // 动态加载 MediaPipe Hands 脚本
