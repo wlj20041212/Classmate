@@ -1371,19 +1371,9 @@ function detectBrowser() {
 function setupCameraPermissionRequest() {
     const browser = detectBrowser();
     
-    // 更新加载提示，合并提示并保留spinner（spinner在文字下方）
+    // 更新加载提示（权限请求阶段，不显示转圈——此时等待用户操作而非加载）
     if (loadingElement) {
-        let promptText = '<div style="position:relative;width:90px;height:90px;margin:0 auto 20px;">'
-            + '<svg width="90" height="90" style="position:absolute;top:0;left:0;">'
-            +   '<circle cx="45" cy="45" r="40" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="5"/>'
-            + '</svg>'
-            + '<svg width="90" height="90" style="position:absolute;top:0;left:0;animation:gestureSpinRing 1s linear infinite;">'
-            +   '<circle cx="45" cy="45" r="34" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-dasharray="8 12" stroke-linecap="round"/>'
-            + '</svg>'
-            + '<svg width="90" height="90" style="position:absolute;top:0;left:0;animation:gestureSpinRing 1.2s linear infinite reverse;">'
-            +   '<circle cx="45" cy="45" r="28" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2.5" stroke-dasharray="4 16" stroke-linecap="round"/>'
-            + '</svg>'
-            + '</div>';
+        let promptText = '';
 
         // 移动端浏览器（特别是QQ浏览器）需要用户点击才能请求权限
         if (browser.isMobile) {
