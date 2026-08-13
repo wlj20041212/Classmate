@@ -1512,11 +1512,15 @@ function initCamera() {
     
     // 构建约束对象（兼容旧版 API和移动端）
     // QQ浏览器和某些移动端浏览器需要简化的约束
+    // 注意：手机前置摄像头在高分辨率约束下会裁切中心区域（数字变焦），
+    // 导致视角变窄、画面显得很近，手势识别困难。
+    // 解决方案：手机上使用较低的理想分辨率（移除 max），让浏览器优先
+    // 使用全传感器广角视角进行降采样，从而获得更广的视野。
     let constraints = {
         video: {
             facingMode: 'user',  // 前置摄像头
-            width: browser.isMobile ? { ideal: 640, max: 1280 } : { ideal: 1280 },
-            height: browser.isMobile ? { ideal: 480, max: 720 } : { ideal: 720 }
+            width: browser.isMobile ? { ideal: 480 } : { ideal: 1280 },
+            height: browser.isMobile ? { ideal: 360 } : { ideal: 720 }
         }
     };
     
