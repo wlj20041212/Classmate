@@ -2648,11 +2648,12 @@ async function loadMediaPipeScript(src) {
 const mediaPipeBlobs = {};
 // 已知文件大小（字节），用于进度计算（HEAD 请求可能不返回 content-length）
 const MP_FILE_SIZES = {
-    'hands_solution_simd_wasm_bin.wasm': 6300000,
-    'hands_solution_packed_assets.data': 4300000,
-    'hands_solution_simd_wasm_bin.js': 265000,
-    'hands_solution_packed_assets_loader.js': 8400,
     'hands.binarypb': 550,
+    'hands_solution_packed_assets_loader.js': 8400,
+    'hands_solution_simd_wasm_bin.js': 265000,
+    'hand_landmark_lite.tflite': 2071000,   // modelComplexity:0 用此模型
+    'hands_solution_packed_assets.data': 4327000,
+    'hands_solution_simd_wasm_bin.wasm': 6293000,
 };
 
 function formatSize(bytes) {
@@ -2807,7 +2808,7 @@ async function initGestureRecognition() {
     }
 
     // 显示下载进度
-    showGestureProgress(0, '准备下载...', '0 / ' + formatSize(11000000));
+    showGestureProgress(0, '准备下载...', '0 / ' + formatSize(13000000));
 
     try {
         // 本地源优先预下载（同源无CORS问题，有进度条）
@@ -2854,24 +2855,12 @@ async function initGestureRecognition() {
                 });
                 instance.onResults(onHandResults);
 
-                // 预热验证：发送测试帧确认 WASM 模型真正可用
-                console.log('[手势] 预热验证中...');
-                const warmupCanvas = document.createElement('canvas');
-                warmupCanvas.width = 64;
-                warmupCanvas.height = 48;
-                const warmupCtx = warmupCanvas.getContext('2d');
-                warmupCtx.fillStyle = '#000';
-                warmupCtx.fillRect(0, 0, 64, 48);
-
-                await Promise.race([
-                    instance.send({ image: warmupCanvas }),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('预热超时(30s)')), 30000))
-                ]);
-
+                // 立即启用，不阻塞等待预热（预热在detectLoop首帧自动完成）
+                // 这样100%后立即进入页面，WASM编译推理引擎在后台进行
                 handsInstance = instance;
                 gestureDetectorActive = true;
                 handsReady = true;
-                console.log('[手势] MediaPipe Hands 加载并预热成功（来源:', src.name, '）');
+                console.log('[手势] MediaPipe Hands 加载成功（来源:', src.name, '），预热将在后台进行');
                 break;
             } catch (e) {
                 console.warn('[手势] 加载失败:', src.name, e.message);
