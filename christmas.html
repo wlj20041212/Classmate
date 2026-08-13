@@ -647,8 +647,8 @@ window.UploadHelper = UploadHelper;
     </div>
 
     <!-- 无手势提示 -->
-    <div id="noGestureHint" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,10,40,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:8px 18px;z-index:9000;opacity:0;pointer-events:none;transition:opacity .4s ease,transform .4s ease;backdrop-filter:blur(8px);color:#c8b8e0;font-size:13px;white-space:nowrap;">
-        🎲 未检测到手势，随机演示中…做个手势试试！
+    <div id="noGestureHint" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,10,40,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:8px 18px;z-index:9000;opacity:0;pointer-events:none;transition:opacity .4s ease,transform .4s ease;backdrop-filter:blur(8px);color:#c8b8e0;font-size:13px;white-space:nowrap;text-align:center;">
+        <span id="noGestureText">🎲 未检测到手势，做个手势试试！</span>
     </div>
 
     <div id="instruction-panel">
@@ -2479,20 +2479,43 @@ function hideNoGestureHint() {
     el.style.transform = 'translateX(-50%) translateY(8px)';
 }
 
-// 启动无手势检测计时器（6 秒无手势 → 提示随机演示）
+// 启动无手势检测计时器（两阶段：6秒提示1，再6秒提示2）
+let noGestureStage = 0; // 0=初始, 1=已提示第一次, 2=已提示第二次
 function startNoGestureTimer() {
     if (noGestureTimer) clearTimeout(noGestureTimer);
+    noGestureStage = 0;
     noGestureTimer = setTimeout(() => {
+        // 第一阶段：6秒无手势，提示"做个手势试试"
+        noGestureStage = 1;
+        setNoGestureText('🎲 未检测到手势，做个手势试试！');
         showNoGestureHint();
+        // 第二阶段：再6秒无手势，提示"进入随机演示环节"
+        noGestureTimer = setTimeout(() => {
+            noGestureStage = 2;
+            setNoGestureText('🎭 进入随机演示环节，重新进入恢复手势');
+            showNoGestureHint();
+        }, 6000);
     }, 6000);
 }
 function resetNoGestureTimer() {
     hideNoGestureHint();
     if (noGestureTimer) clearTimeout(noGestureTimer);
-    // 手势触发后，6 秒内无新手势才再次提示
+    noGestureStage = 0;
+    // 手势触发后，6秒内无新手势才再次提示
     noGestureTimer = setTimeout(() => {
+        noGestureStage = 1;
+        setNoGestureText('🎲 未检测到手势，做个手势试试！');
         showNoGestureHint();
+        noGestureTimer = setTimeout(() => {
+            noGestureStage = 2;
+            setNoGestureText('🎭 进入随机演示环节，重新进入恢复手势');
+            showNoGestureHint();
+        }, 6000);
     }, 6000);
+}
+function setNoGestureText(text) {
+    const el = document.getElementById('noGestureText');
+    if (el) el.textContent = text;
 }
 
 // 动态加载 MediaPipe Hands 脚本
