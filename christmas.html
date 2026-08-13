@@ -2477,6 +2477,17 @@ function setupClickToCapture() {
 
 // 录像功能已移除，只保留拍照功能
 
+// 将手势识别需要的变量/函数挂载到 window，供普通 script 访问
+window.showFeedback = showFeedback;
+window.triggerStarAnimation = triggerStarAnimation;
+window.updateMagicTrail = updateMagicTrail;
+window.updateTreeTheme = updateTreeTheme;
+window.spawnHeart = spawnHeart;
+window.state = state;
+window.THEMES = THEMES;
+window.treeGroup = treeGroup;
+window.soundManager = soundManager;
+window.THREE = THREE;
 
     </script>
 
@@ -2591,8 +2602,10 @@ async function loadMediaPipeScript(src) {
 // 初始化手势识别（摄像头成功后调用）
 async function initGestureRecognition() {
     if (gestureDetectorActive) return; // 避免重复初始化
-    if (!cameraVideo || cameraVideo.readyState < 2) {
-        console.warn('[手势] 视频未就绪，稍后重试');
+    // cameraVideo 在 module scope，这里用 getElementById 获取
+    const camVideo = document.getElementById('camera_video');
+    if (!camVideo || camVideo.readyState < 2) {
+        console.warn('[手势] 视频未就绪，稍后重试, readyState:', camVideo ? camVideo.readyState : 'no video');
         setTimeout(initGestureRecognition, 1000);
         return;
     }
@@ -2660,10 +2673,11 @@ async function initGestureRecognition() {
 let detectBusy = false;
 async function detectLoop() {
     if (!gestureDetectorActive) return;
-    if (!detectBusy && handsInstance && cameraVideo && cameraVideo.readyState >= 2) {
+    const camVideo = document.getElementById('camera_video');
+    if (!detectBusy && handsInstance && camVideo && camVideo.readyState >= 2) {
         detectBusy = true;
         try {
-            await handsInstance.send({ image: cameraVideo });
+            await handsInstance.send({ image: camVideo });
         } catch (e) {
             // 单帧异常不影响整体
         }
@@ -2692,9 +2706,10 @@ function initLocalGestureDetection() {
 
 function localDetectLoop() {
     if (!localGestureActive) return;
-    if (cameraVideo && cameraVideo.readyState >= 2 && cameraVideo.videoWidth > 0) {
+    const camVideo = document.getElementById('camera_video');
+    if (camVideo && camVideo.readyState >= 2 && camVideo.videoWidth > 0) {
         try {
-            localGestureCtx.drawImage(cameraVideo, 0, 0, 160, 120);
+            localGestureCtx.drawImage(camVideo, 0, 0, 160, 120);
             const imageData = localGestureCtx.getImageData(0, 0, 160, 120);
             const gesture = detectGestureLocal(imageData);
             if (gesture) {
@@ -2842,43 +2857,44 @@ function triggerGestureEffect(gesture) {
     // 同一手势连续触发也需冷却
     if (gesture === lastGestureName && now - lastGestureTime < GESTURE_COOLDOWN_MS) return;
 
+    const w = window;
     const map = {
-        'open':  () => { triggerStarAnimation(); },                          // ✋ 伯利恒之星
+        'open':  () => { w.triggerStarAnimation(); },                          // ✋ 伯利恒之星
         'fist':  () => {                                                     // ✊ 暴风雪
-            state.blizzardMode = true;
-            soundManager.playEffect('wind');
-            showFeedback("🌪️ 暴风雪!");
-            setTimeout(() => { state.blizzardMode = false; }, 2000);
+            w.state.blizzardMode = true;
+            w.soundManager.playEffect('wind');
+            w.showFeedback("🌪️ 暴风雪!");
+            setTimeout(() => { w.state.blizzardMode = false; }, 2000);
         },
         'peace': () => {                                                     // ✌️ 彩虹雪花
-            state.rainbowMode = !state.rainbowMode;
-            soundManager.playEffect('switch');
-            showFeedback(state.rainbowMode ? "🌈 彩虹模式" : "❄️ 纯净模式");
+            w.state.rainbowMode = !w.state.rainbowMode;
+            w.soundManager.playEffect('switch');
+            w.showFeedback(w.state.rainbowMode ? "🌈 彩虹模式" : "❄️ 纯净模式");
         },
         'ok':    () => {                                                     // 👌 音乐
-            const playing = soundManager.toggleBGM();
-            showFeedback(playing ? "🎵 播放音乐" : "🔇 暂停音乐");
+            const playing = w.soundManager.toggleBGM();
+            w.showFeedback(playing ? "🎵 播放音乐" : "🔇 暂停音乐");
         },
         'thumb': () => {                                                     // 👍 圣树充能
-            soundManager.playEffect('grow');
-            showFeedback("👍 圣树充能");
-            gsap.to(treeGroup.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.5, yoyo: true, repeat: 1 });
+            w.soundManager.playEffect('grow');
+            w.showFeedback("👍 圣树充能");
+            gsap.to(w.treeGroup.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.5, yoyo: true, repeat: 1 });
         },
         'call':  () => {                                                     // 🤙 主题切换
-            soundManager.playEffect('switch');
-            updateTreeTheme();
-            showFeedback("🎨 主题: " + THEMES[state.themeIndex].name);
+            w.soundManager.playEffect('switch');
+            w.updateTreeTheme();
+            w.showFeedback("🎨 主题: " + w.THEMES[w.state.themeIndex].name);
         },
         'point': () => {                                                     // 👆 魔法光绘
-            updateMagicTrail(new THREE.Vector3(0, 10, 0));
-            showFeedback("✨ 魔法光绘");
+            w.updateMagicTrail(new w.THREE.Vector3(0, 10, 0));
+            w.showFeedback("✨ 魔法光绘");
         },
         'ily':   () => {                                                     // 🤟 爱心雨
-            showFeedback("❤️ 圣诞快乐");
-            soundManager.playEffect('magic');
+            w.showFeedback("❤️ 圣诞快乐");
+            w.soundManager.playEffect('magic');
             for (let i = 0; i < 5; i++) {
                 setTimeout(() => {
-                    spawnHeart(new THREE.Vector3(
+                    w.spawnHeart(new w.THREE.Vector3(
                         (Math.random() - 0.5) * 10,
                         Math.random() * 10,
                         (Math.random() - 0.5) * 10
