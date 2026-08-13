@@ -129,6 +129,10 @@ body {
     to { transform: rotate(360deg); }
 }
 
+@keyframes gestureSpinRing {
+    to { transform: rotate(360deg); }
+}
+
 @-webkit-keyframes spin {
     to { -webkit-transform: rotate(360deg); }
 }
@@ -631,7 +635,17 @@ window.UploadHelper = UploadHelper;
     <video id="camera_video" autoplay playsinline webkit-playsinline x5-playsinline muted style="position:absolute;left:-9999px;top:0;width:320px;height:240px;opacity:1;pointer-events:none;"></video>
 
     <div id="loading">
-        <div class="spinner"></div>
+        <div style="position:relative;width:90px;height:90px;margin:0 auto 20px;">
+            <svg width="90" height="90" style="position:absolute;top:0;left:0;">
+                <circle cx="45" cy="45" r="40" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="5"/>
+            </svg>
+            <svg width="90" height="90" style="position:absolute;top:0;left:0;animation:gestureSpinRing 1s linear infinite;">
+                <circle cx="45" cy="45" r="34" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-dasharray="8 12" stroke-linecap="round"/>
+            </svg>
+            <svg width="90" height="90" style="position:absolute;top:0;left:0;animation:gestureSpinRing 1.2s linear infinite reverse;">
+                <circle cx="45" cy="45" r="28" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2.5" stroke-dasharray="4 16" stroke-linecap="round"/>
+            </svg>
+        </div>
         <p>正在初始化魔法引擎...</p>
         <p style="font-size: 12px; color: #aaa;">请允许摄像头权限<br>建议横屏体验最佳</p>
     </div>
@@ -1359,7 +1373,17 @@ function setupCameraPermissionRequest() {
     
     // 更新加载提示，合并提示并保留spinner（spinner在文字下方）
     if (loadingElement) {
-        let promptText = '<div class="spinner"></div>';
+        let promptText = '<div style="position:relative;width:90px;height:90px;margin:0 auto 20px;">'
+            + '<svg width="90" height="90" style="position:absolute;top:0;left:0;">'
+            +   '<circle cx="45" cy="45" r="40" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="5"/>'
+            + '</svg>'
+            + '<svg width="90" height="90" style="position:absolute;top:0;left:0;animation:gestureSpinRing 1s linear infinite;">'
+            +   '<circle cx="45" cy="45" r="34" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-dasharray="8 12" stroke-linecap="round"/>'
+            + '</svg>'
+            + '<svg width="90" height="90" style="position:absolute;top:0;left:0;animation:gestureSpinRing 1.2s linear infinite reverse;">'
+            +   '<circle cx="45" cy="45" r="28" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2.5" stroke-dasharray="4 16" stroke-linecap="round"/>'
+            + '</svg>'
+            + '</div>';
 
         // 移动端浏览器（特别是QQ浏览器）需要用户点击才能请求权限
         if (browser.isMobile) {
