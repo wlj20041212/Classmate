@@ -4164,7 +4164,7 @@ if (typeof module !== 'undefined' && module.exports) {
     async function renderPhotos() {
         content.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">加载中...</div>';
         try {
-            const res = await fetch(`${PHOTO_WORKER_URL}/api/list`);
+            const res = await fetch(`${PHOTO_WORKER_URL}/api/list?_t=${Date.now()}`);
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
             if (!data.success || data.count === 0) {
@@ -4217,12 +4217,13 @@ if (typeof module !== 'undefined' && module.exports) {
     window.deletePhoto = async function(key) {
         if (!confirm('确定删除这张照片吗？')) return;
         try {
-            const res = await fetch(`${PHOTO_WORKER_URL}/api/delete?key=${encodeURIComponent(key)}`);
+            const res = await fetch(`${PHOTO_WORKER_URL}/api/delete?key=${encodeURIComponent(key)}&_t=${Date.now()}`);
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
             if (data.success) {
                 showToast('照片已删除', 'success');
-                renderPhotos();
+                // KV 最终一致性，延迟 1 秒再刷新
+                setTimeout(() => { renderPhotos(); }, 1000);
             } else {
                 showToast('删除失败', 'error');
             }
@@ -4301,7 +4302,7 @@ if (typeof module !== 'undefined' && module.exports) {
             } else {
                 // 首次打开时加载 iframe（带版本号强制刷新）
                 if (!aiIframe.src || aiIframe.src.indexOf('v=') === -1) {
-                    aiIframe.src = 'ai.html?v=14.5';
+                    aiIframe.src = 'ai.html?v=14.6';
                 }
                 aiSidebar.classList.add('open');
             }

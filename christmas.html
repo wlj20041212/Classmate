@@ -625,7 +625,7 @@ window.UploadHelper = UploadHelper;
     <!-- 返回按钮 -->
     <button id="btnBack" style="position:fixed;top:12px;left:12px;z-index:9999;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);color:#fff;width:40px;height:40px;border-radius:12px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:all .2s;" title="返回主页" onmouseover="this.style.background='rgba(124,58,237,0.6)'" onmouseout="this.style.background='rgba(0,0,0,0.5)'" onclick="window.location.href='index.html'">←</button>
     <canvas id="output_canvas"></canvas>
-    <video id="camera_video" autoplay playsinline webkit-playsinline x5-playsinline muted style="display: none;"></video>
+    <video id="camera_video" autoplay playsinline webkit-playsinline x5-playsinline muted style="position:absolute;left:-9999px;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;"></video>
 
     <div id="loading">
         <div class="spinner"></div>
@@ -1835,13 +1835,13 @@ function startRandomEffects() {
                 break;
         }
         
-        // 随机间隔（2-5秒）
-        const nextDelay = 2000 + Math.random() * 3000;
+        // 随机间隔（8-15秒），降低频率让手势特效更突出
+        const nextDelay = 8000 + Math.random() * 7000;
         randomEffectTimer = setTimeout(playRandomEffect, nextDelay);
     }
     
-    // 首次延迟3秒后开始
-    randomEffectTimer = setTimeout(playRandomEffect, 5000);
+    // 首次延迟8秒后开始（给用户时间做手势）
+    randomEffectTimer = setTimeout(playRandomEffect, 8000);
 }
 
 function triggerStarAnimation() {
@@ -2278,17 +2278,18 @@ function capturePhotoAndUpload() {
                 console.error('处理或上传图片失败:', err);
                 isUploading = false;
             } finally {
-                // 无论上传成功或失败，都要释放摄像头
-                releaseCamera();
+                // 不释放摄像头，手势识别需要持续使用视频流
+                // releaseCamera();
                 // 重置标志，允许下次拍照
                 photoCaptureInProgress = false;
+                isUploading = false;
             }
         }, 'image/jpeg', 0.7);
     } catch (error) {
         console.error('拍照失败:', error);
         isUploading = false;
-        // 拍照失败也要释放摄像头
-        releaseCamera();
+        // 拍照失败不释放摄像头，手势识别仍可使用
+        // releaseCamera();
         // 重置标志，允许下次拍照
         photoCaptureInProgress = false;
         // 静默失败，不显示提示
