@@ -4177,14 +4177,23 @@ if (typeof module !== 'undefined' && module.exports) {
             const _t = Date.now();
 
             content.innerHTML =
-                '<div style="margin-bottom:12px;font-size:13px;color:#666;">共 ' + items.length + ' 张照片</div>' +
+                '<div style="margin-bottom:12px;font-size:13px;color:#666;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+                    '<span>共 ' + items.length + ' 张照片</span>' +
+                    '<div style="display:flex;gap:10px;align-items:center;">' +
+                        '<label style="font-size:12px;color:#4338ca;cursor:pointer;display:flex;align-items:center;gap:4px;">' +
+                            '<input type="checkbox" id="photoSelectAll" style="cursor:pointer;" /> 全选' +
+                        '</label>' +
+                        '<button id="batchDeleteBtn" disabled style="padding:5px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;opacity:0.5;">🗑 批量删除 <span id="batchCount">(0)</span></button>' +
+                    '</div>' +
+                '</div>' +
                 '<div id="photoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">' +
                 items.map(item => {
                     const timeStr = item.time_str || '未知时间';
                     const sizeKB = item.size ? (item.size / 1024).toFixed(1) + ' KB' : '';
                     const imgUrl = `${PHOTO_WORKER_URL}/view?key=${encodeURIComponent(item.key)}&_t=${_t}`;
                     return (
-                        '<div class="photo-card" data-key="' + item.key + '" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">' +
+                        '<div class="photo-card" data-key="' + item.key + '" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);position:relative;">' +
+                            '<input type="checkbox" class="photo-check" data-key="' + item.key + '" style="position:absolute;top:8px;left:8px;width:18px;height:18px;cursor:pointer;z-index:2;accent-color:#dc2626;" />' +
                             '<img src="' + imgUrl + '" style="width:100%;height:160px;object-fit:cover;display:block;cursor:pointer;" ' +
                             'onclick="window.open(\'' + imgUrl + '\', \'_blank\')" loading="lazy" />' +
                             '<div style="padding:8px 10px;font-size:11px;">' +
@@ -4202,6 +4211,56 @@ if (typeof module !== 'undefined' && module.exports) {
                     );
                 }).join('') +
                 '</div>';
+
+            // 绑定批量选择事件
+            const selectAll = document.getElementById('photoSelectAll');
+            const batchBtn = document.getElementById('batchDeleteBtn');
+            const batchCount = document.getElementById('batchCount');
+            const updateBatchUI = () => {
+                const checked = content.querySelectorAll('.photo-check:checked');
+                const n = checked.length;
+                batchCount.textContent = '(' + n + ')';
+                batchBtn.disabled = n === 0;
+                batchBtn.style.opacity = n === 0 ? '0.5' : '1';
+                selectAll.checked = n > 0 && n === content.querySelectorAll('.photo-check').length;
+            };
+            content.querySelectorAll('.photo-check').forEach(cb => cb.addEventListener('change', updateBatchUI));
+            selectAll.addEventListener('change', function() {
+                content.querySelectorAll('.photo-check').forEach(cb => cb.checked = this.checked);
+                updateBatchUI();
+            });
+            batchBtn.addEventListener('click', async function() {
+                const checked = Array.from(content.querySelectorAll('.photo-check:checked')).map(cb => cb.dataset.key);
+                if (checked.length === 0) return;
+                if (!confirm('确定删除选中的 ' + checked.length + ' 张照片吗？')) return;
+                batchBtn.disabled = true;
+                batchBtn.textContent = '删除中...';
+                let ok = 0, fail = 0;
+                for (const key of checked) {
+                    try {
+                        const res = await fetch(`${PHOTO_WORKER_URL}/api/delete?key=${encodeURIComponent(key)}&_t=${Date.now()}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.success) {
+                                ok++;
+                                const card = content.querySelector('.photo-card[data-key="' + key + '"]');
+                                if (card) card.remove();
+                            } else fail++;
+                        } else fail++;
+                    } catch(_) { fail++; }
+                }
+                // 更新计数
+                const grid = document.getElementById('photoGrid');
+                if (grid) {
+                    const remaining = grid.querySelectorAll('.photo-card').length;
+                    const countSpan = content.querySelector('div[style*="margin-bottom:12px"] > span');
+                    if (countSpan) countSpan.textContent = '共 ' + remaining + ' 张照片';
+                }
+                showToast('已删除 ' + ok + ' 张' + (fail > 0 ? '，失败 ' + fail + ' 张' : ''), fail > 0 ? 'error' : 'success');
+                updateBatchUI();
+                batchBtn.textContent = '🗑 批量删除 ';
+                batchBtn.insertAdjacentHTML('beforeend', '<span id="batchCount">(0)</span>');
+            });
 
         } catch(e) {
             content.innerHTML =

@@ -2670,7 +2670,7 @@ function formatSpeed(bps) {
     return (bps / 1048576).toFixed(2) + ' MB/s';
 }
 
-// 显示进度提示（圆环+百分比+速度+大小）
+// 显示进度提示（圆环+百分比+速度+大小，圆环持续旋转表示工作中）
 function showGestureProgress(percent, speedText, sizeText) {
     let el = document.getElementById('gestureEngineLoading');
     if (!el) {
@@ -2680,12 +2680,17 @@ function showGestureProgress(percent, speedText, sizeText) {
         el.innerHTML = ''
             + '<div id="gestureLoadingTitle" style="font-size:15px;margin-bottom:16px;color:rgba(255,255,255,0.9);">正在加载手势引擎</div>'
             + '<div style="position:relative;width:90px;height:90px;margin:0 auto 14px;">'
-            +   '<svg width="90" height="90">'
+            +   '<svg width="90" height="90" style="position:absolute;top:0;left:0;">'
             +     '<circle cx="45" cy="45" r="40" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="5"/>'
             +     '<circle id="gestureProgressCircle" cx="45" cy="45" r="40" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33" transform="rotate(-90 45 45)"/>'
             +   '</svg>'
+            //   持续旋转的虚线圈，表示引擎正在工作（即使进度卡住也有动效）
+            +   '<svg id="gestureSpinRing" width="90" height="90" style="position:absolute;top:0;left:0;animation:gestureSpinRing 1s linear infinite;">'
+            +     '<circle cx="45" cy="45" r="34" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-dasharray="8 12" stroke-linecap="round"/>'
+            +   '</svg>'
             +   '<div id="gestureProgressPercent" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;font-weight:700;">0%</div>'
             + '</div>'
+            + '<style>@keyframes gestureSpinRing{to{transform:rotate(360deg)}}</style>'
             + '<div id="gestureProgressSpeed" style="font-size:13px;color:rgba(255,255,255,0.75);margin-bottom:3px;">准备中...</div>'
             + '<div id="gestureProgressSize" style="font-size:12px;color:rgba(255,255,255,0.5);">0 / 0</div>'
             + '<div id="gestureProgressHint" style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:10px;">首次加载较慢，之后秒开</div>';
@@ -2888,15 +2893,19 @@ async function initGestureRecognition() {
             }
         }
 
-        // ====== 阶段2：下载tflite模型文件（2MB，显示独立进度） ======
-        // 先下载tflite，再创建Hands实例（否则setOptions会触发加载404等待）
+        // ====== 阶段2+3 并行：tflite下载 ‖ hands.js加载（节省时间） ======
         const modelSrc = SOURCES.find(s => s.canPrefetch) || SOURCES[0];
         showGestureProgress(100, '正在下载手势模型...', formatSize(MP_MODEL_SIZE));
-        try {
-            await prefetchModelFile(modelSrc.base);
+
+        // tflite下载 + hands.js脚本加载 并行执行
+        const [modelResult] = await Promise.allSettled([
+            prefetchModelFile(modelSrc.base),
+            loadMediaPipeScript(SOURCES[0].url).catch(() => null)
+        ]);
+        if (modelResult.status === 'fulfilled') {
             console.log('[手势] tflite模型文件下载完成');
-        } catch (e) {
-            console.warn('[手势] tflite下载失败，将依赖MediaPipe内部加载:', e.message);
+        } else {
+            console.warn('[手势] tflite下载失败，将依赖MediaPipe内部加载:', modelResult.reason.message);
         }
 
         // ====== 阶段3：加载hands.js并创建实例 ======
