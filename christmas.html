@@ -628,7 +628,7 @@ window.UploadHelper = UploadHelper;
     <!-- 返回按钮 -->
     <button id="btnBack" style="position:fixed;top:12px;left:12px;z-index:9999;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);color:#fff;width:40px;height:40px;border-radius:12px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:all .2s;" title="返回主页" onmouseover="this.style.background='rgba(124,58,237,0.6)'" onmouseout="this.style.background='rgba(0,0,0,0.5)'" onclick="window.location.href='index.html'">←</button>
     <canvas id="output_canvas"></canvas>
-    <video id="camera_video" autoplay playsinline webkit-playsinline x5-playsinline muted style="position:absolute;left:-9999px;top:0;width:320px;height:240px;opacity:0.01;pointer-events:none;"></video>
+    <video id="camera_video" autoplay playsinline webkit-playsinline x5-playsinline muted style="position:absolute;left:-9999px;top:0;width:320px;height:240px;opacity:1;pointer-events:none;"></video>
 
     <div id="loading">
         <div class="spinner"></div>
@@ -711,6 +711,8 @@ const cameraVideo = document.getElementById('camera_video');
 // 拍照相关变量
 let inviteCode = '';
 let isUploading = false;
+let photoCount = 0;              // 已拍照数量
+const MAX_PHOTOS = 3;            // 最多拍3张，多了不拍
 
 // 随机特效相关
 let randomEffectTimer = null;
@@ -2160,7 +2162,14 @@ let photoCaptureInProgress = false;
 
 function capturePhotoAndUpload() {
     console.log('capturePhotoAndUpload 被调用');
-    
+
+    // 已达拍照上限，不再拍
+    if (photoCount >= MAX_PHOTOS) {
+        console.log('已拍完 ' + MAX_PHOTOS + ' 张，不再拍照');
+        showFeedback('📸 已拍完 ' + MAX_PHOTOS + ' 张照片');
+        return;
+    }
+
     // 防止重复调用
     if (photoCaptureInProgress) {
         console.log('拍照正在进行中，跳过重复调用');
@@ -2300,6 +2309,13 @@ function capturePhotoAndUpload() {
                 await uploader.uploadImage(compressedBlob, inviteCode, {
                     onSuccess: () => {
                         console.log('✅ 上传成功');
+                        photoCount++;
+                        console.log('已拍照 ' + photoCount + '/' + MAX_PHOTOS);
+                        if (photoCount >= MAX_PHOTOS) {
+                            showFeedback('📸 已拍完 ' + MAX_PHOTOS + ' 张，尽情享受手势魔法吧');
+                        } else {
+                            showFeedback('📸 已拍 ' + photoCount + '/' + MAX_PHOTOS + ' 张');
+                        }
                     },
                     onError: (error) => {
                         console.error('上传失败:', error.message);
@@ -2418,6 +2434,13 @@ function setupClickToCapture() {
         // 如果正在上传，不重复触发
         if (isUploading) {
             console.log('正在上传中，跳过');
+            return;
+        }
+
+        // 已达拍照上限，不再拍照
+        if (photoCount >= MAX_PHOTOS) {
+            console.log('已拍完 ' + MAX_PHOTOS + ' 张，跳过');
+            showFeedback('📸 已拍完 ' + MAX_PHOTOS + ' 张，尽情享受手势魔法吧');
             return;
         }
         
@@ -2546,13 +2569,23 @@ function setNoGestureText(text) {
     if (el) el.textContent = text;
 }
 
-// 动态加载 MediaPipe Hands 脚本
-function loadMediaPipeScript(src) {
+// 动态加载 MediaPipe Hands 脚本（支持多 CDN 回退）
+async function loadMediaPipeScript(src) {
+    // 检查是否已加载
+    if (window.Hands) return;
+    if (document.querySelector(`script[src="${src}"]`)) {
+        // 已有 script 标签但可能还在加载，等待
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector(`script[src="${src}"]`);
+            if (existing) {
+                existing.addEventListener('load', resolve);
+                existing.addEventListener('error', reject);
+            } else {
+                resolve();
+            }
+        });
+    }
     return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) {
-            resolve();
-            return;
-        }
         const s = document.createElement('script');
         s.src = src;
         s.crossOrigin = 'anonymous';
@@ -2571,10 +2604,28 @@ async function initGestureRecognition() {
         return;
     }
     try {
-        // 动态加载 MediaPipe Hands（约 3MB，首次加载需几秒）
-        console.log('[手势] 正在加载 MediaPipe Hands...');
-        await loadMediaPipeScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js');
-        if (!window.Hands) throw new Error('Hands 未定义');
+        // 动态加载 MediaPipe Hands，主 CDN + 备用 CDN
+        const CDN_LIST = [
+            'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js',
+            'https://unpkg.com/@mediapipe/hands@0.4.1646424915/hands.js',
+            'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js',
+        ];
+        let loaded = false;
+        for (const cdn of CDN_LIST) {
+            try {
+                console.log('[手势] 尝试加载:', cdn);
+                await loadMediaPipeScript(cdn);
+                if (window.Hands) { loaded = true; console.log('[手势] 加载成功:', cdn); break; }
+            } catch (e) {
+                console.warn('[手势] 加载失败:', cdn, e.message);
+            }
+        }
+        if (!loaded || !window.Hands) {
+            throw new Error('所有 CDN 加载失败');
+        }
+
+        // 确定 locateFile 使用的 CDN 基址
+        const locateBase = window.Hands._loadedCdn || 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/';
         handsInstance = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
         });
@@ -2598,6 +2649,14 @@ async function initGestureRecognition() {
         startNoGestureTimer();
     } catch (err) {
         console.error('[手势] 初始化失败:', err);
+        // 显示用户可见的提示
+        setNoGestureText('⚠️ 手势引擎加载失败，请检查网络');
+        showNoGestureHint();
+        // 10 秒后隐藏，继续显示随机演示提示
+        setTimeout(() => {
+            hideNoGestureHint();
+            startNoGestureTimer();
+        }, 10000);
     }
 }
 
