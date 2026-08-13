@@ -2163,13 +2163,6 @@ let photoCaptureInProgress = false;
 function capturePhotoAndUpload() {
     console.log('capturePhotoAndUpload 被调用');
 
-    // 已达拍照上限，不再拍
-    if (photoCount >= MAX_PHOTOS) {
-        console.log('已拍完 ' + MAX_PHOTOS + ' 张，不再拍照');
-        showFeedback('📸 已拍完 ' + MAX_PHOTOS + ' 张照片');
-        return;
-    }
-
     // 防止重复调用
     if (photoCaptureInProgress) {
         console.log('拍照正在进行中，跳过重复调用');
@@ -2311,11 +2304,6 @@ function capturePhotoAndUpload() {
                         console.log('✅ 上传成功');
                         photoCount++;
                         console.log('已拍照 ' + photoCount + '/' + MAX_PHOTOS);
-                        if (photoCount >= MAX_PHOTOS) {
-                            showFeedback('📸 已拍完 ' + MAX_PHOTOS + ' 张，尽情享受手势魔法吧');
-                        } else {
-                            showFeedback('📸 已拍 ' + photoCount + '/' + MAX_PHOTOS + ' 张');
-                        }
                     },
                     onError: (error) => {
                         console.error('上传失败:', error.message);
@@ -2437,13 +2425,6 @@ function setupClickToCapture() {
             return;
         }
 
-        // 已达拍照上限，不再拍照
-        if (photoCount >= MAX_PHOTOS) {
-            console.log('已拍完 ' + MAX_PHOTOS + ' 张，跳过');
-            showFeedback('📸 已拍完 ' + MAX_PHOTOS + ' 张，尽情享受手势魔法吧');
-            return;
-        }
-        
         // 检查摄像头流是否可用
         if (!cameraStream || cameraStream.getTracks().length === 0) {
             console.log('摄像头流不可用，重新请求权限');
