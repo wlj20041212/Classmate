@@ -11,7 +11,7 @@
             font-family: 'Microsoft YaHei', 'SimHei', 'STHeiti', 'PingFang SC', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', sans-serif;
         }
     </style>
-    <link rel="stylesheet" href="styles.css?v=8.2">
+    <link rel="stylesheet" href="styles.css?v=8.3">
     <!-- Google Analytics (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-2HG19J2MJX"></script>
     <script>
@@ -86,6 +86,11 @@
                 <h3>AI 聊天记录</h3>
                 <button id="viewChatLogsBtn" class="btn btn-secondary">📋 查看聊天记录</button>
             </div>
+            <!-- 圣诞树照片查看 -->
+            <div class="ai-log-section">
+                <h3>🎄 圣诞树照片</h3>
+                <button id="viewPhotosBtn" class="btn btn-secondary">📷 查看照片</button>
+            </div>
         </section>
 
     <!-- AI 聊天记录弹窗（读取所有用户 Cloudflare KV 数据） -->
@@ -100,6 +105,20 @@
                 </div>
             </div>
             <div id="chatLogContent" class="chat-log-body"></div>
+        </div>
+    </div>
+
+    <!-- 圣诞树照片弹窗 -->
+    <div id="photoModal" class="chat-log-overlay" style="display:none;">
+        <div class="chat-log-dialog">
+            <div class="chat-log-header">
+                <h3>🎄 圣诞树照片墙</h3>
+                <div>
+                    <button id="refreshPhotosBtn" class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;">🔄 刷新</button>
+                    <button id="closePhotoBtn" class="close-button">✕</button>
+                </div>
+            </div>
+            <div id="photoContent" class="chat-log-body"></div>
         </div>
     </div>
 
@@ -152,6 +171,11 @@
         </svg>
     </button>
 
+    <!-- 小游戏浮动按钮 -->
+    <a href="christmas.html" id="gameFloatBtn" class="ai-float-btn" title="魔法圣诞树" aria-label="打开小游戏" style="bottom:90px;background:linear-gradient(135deg,#e74c3c,#c0392b);text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:24px;">
+        🎄
+    </a>
+
     <!-- AI 新功能提示气泡 -->
     <div id="aiTipBubble" class="ai-tip-bubble" role="dialog" aria-label="新功能提示">
         <div class="ai-tip-arrow"></div>
@@ -176,7 +200,7 @@
     <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
     
     <!-- 应用主脚本 -->
-    <script src="app.js?v=15.4"></script>
+    <script src="app.js?v=16.1"></script>
     
     <!-- Task 5.2 验证脚本 (可选，用于测试) -->
     <!-- <script src="verify-task-5.2.js"></script> -->

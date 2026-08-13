@@ -4148,6 +4148,107 @@ if (typeof module !== 'undefined' && module.exports) {
     });
 })();
 
+// ============== 圣诞树照片查看（Owner 模式） ==============
+
+(function() {
+    const viewBtn = document.getElementById('viewPhotosBtn');
+    const modal = document.getElementById('photoModal');
+    const closeBtn = document.getElementById('closePhotoBtn');
+    const refreshBtn = document.getElementById('refreshPhotosBtn');
+    const content = document.getElementById('photoContent');
+
+    if (!viewBtn || !modal) return;
+
+    const PHOTO_WORKER_URL = 'https://photo.wanglejiang.top';
+
+    async function renderPhotos() {
+        content.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">加载中...</div>';
+        try {
+            const res = await fetch(`${PHOTO_WORKER_URL}/api/list`);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (!data.success || data.count === 0) {
+                content.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">暂无照片</div>';
+                return;
+            }
+
+            // 按时间倒序排列
+            const items = data.items.sort((a, b) => (b.time || 0) - (a.time || 0));
+
+            content.innerHTML =
+                '<div style="margin-bottom:12px;font-size:13px;color:#666;">共 ' + items.length + ' 张照片</div>' +
+                '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">' +
+                items.map(item => {
+                    const timeStr = item.time_str || '未知时间';
+                    const sizeKB = item.size ? (item.size / 1024).toFixed(1) + ' KB' : '';
+                    const imgUrl = `${PHOTO_WORKER_URL}/view?key=${encodeURIComponent(item.key)}`;
+                    return (
+                        '<div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">' +
+                            '<img src="' + imgUrl + '" style="width:100%;height:160px;object-fit:cover;display:block;cursor:pointer;" ' +
+                            'onclick="window.open(\'' + imgUrl + '\', \'_blank\')" loading="lazy" />' +
+                            '<div style="padding:8px 10px;font-size:11px;">' +
+                                '<div style="color:#333;font-weight:600;margin-bottom:3px;">' + timeStr + '</div>' +
+                                '<div style="color:#999;margin-bottom:6px;">' + sizeKB + '</div>' +
+                                '<div style="display:flex;gap:8px;">' +
+                                    '<a href="' + imgUrl + '" download="photo_' + item.key + '.jpg" ' +
+                                    'style="color:#4338ca;text-decoration:none;font-size:11px;cursor:pointer;">⬇ 下载</a>' +
+                                    '<span style="color:#ccc;">|</span>' +
+                                    '<a href="javascript:void(0)" onclick="deletePhoto(\'' + item.key + '\')" ' +
+                                    'style="color:#dc2626;text-decoration:none;font-size:11px;cursor:pointer;">🗑 删除</a>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>'
+                    );
+                }).join('') +
+                '</div>';
+
+        } catch(e) {
+            content.innerHTML =
+                '<div style="text-align:center;color:#c00;padding:30px 20px;">' +
+                    '<div style="font-size:14px;font-weight:600;margin-bottom:8px;">加载失败</div>' +
+                    '<div style="font-size:12px;color:#666;">' + e.message + '</div>' +
+                    '<div style="font-size:12px;color:#999;margin-top:10px;">请确认 photo.wanglejiang.top Worker 已部署</div>' +
+                '</div>';
+            console.error('[照片] 加载失败:', e);
+        }
+    }
+
+    // 删除照片（全局函数，供 onclick 调用）
+    window.deletePhoto = async function(key) {
+        if (!confirm('确定删除这张照片吗？')) return;
+        try {
+            const res = await fetch(`${PHOTO_WORKER_URL}/api/delete?key=${encodeURIComponent(key)}`);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.success) {
+                showToast('照片已删除', 'success');
+                renderPhotos();
+            } else {
+                showToast('删除失败', 'error');
+            }
+        } catch(e) {
+            showToast('删除失败: ' + e.message, 'error');
+        }
+    };
+
+    viewBtn.addEventListener('click', function() {
+        renderPhotos();
+        modal.style.display = 'flex';
+    });
+
+    closeBtn.addEventListener('click', function() {
+        modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', renderPhotos);
+    }
+})();
+
 // ============== AI 助手浮动按钮 ==============
 
 (function() {
@@ -4200,7 +4301,7 @@ if (typeof module !== 'undefined' && module.exports) {
             } else {
                 // 首次打开时加载 iframe（带版本号强制刷新）
                 if (!aiIframe.src || aiIframe.src.indexOf('v=') === -1) {
-                    aiIframe.src = 'ai.html?v=14.4';
+                    aiIframe.src = 'ai.html?v=14.5';
                 }
                 aiSidebar.classList.add('open');
             }
