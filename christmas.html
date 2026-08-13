@@ -633,6 +633,24 @@ window.UploadHelper = UploadHelper;
         <p style="font-size: 12px; color: #aaa;">请允许摄像头权限<br>建议横屏体验最佳</p>
     </div>
 
+    <!-- 首次进入引导气泡 -->
+    <div id="gestureTutorial" style="position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(8px);max-width:320px;background:rgba(20,10,40,0.92);border:1px solid rgba(124,58,237,0.4);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.4);padding:14px 16px;z-index:9001;opacity:0;pointer-events:none;transition:opacity .4s ease,transform .4s ease;backdrop-filter:blur(12px);">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+            <span style="font-size:22px;flex-shrink:0;">🖐</span>
+            <div style="flex:1;color:#e8e0f0;font-size:13px;line-height:1.6;">
+                <strong style="color:#a78bfa;font-size:14px;">手势魔法已就绪！</strong><br>
+                对着摄像头做出手势即可触发特效：<br>
+                ✋星星 · ✊暴风雪 · ✌️彩虹 · 👍充能 · 🤟爱心雨
+            </div>
+            <button id="tutorialClose" style="background:none;border:none;color:#9a93a8;font-size:18px;line-height:1;cursor:pointer;padding:0 2px;flex-shrink:0;" aria-label="关闭">×</button>
+        </div>
+    </div>
+
+    <!-- 无手势提示 -->
+    <div id="noGestureHint" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,10,40,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:8px 18px;z-index:9000;opacity:0;pointer-events:none;transition:opacity .4s ease,transform .4s ease;backdrop-filter:blur(8px);color:#c8b8e0;font-size:13px;white-space:nowrap;">
+        🎲 未检测到手势，随机演示中…做个手势试试！
+    </div>
+
     <div id="instruction-panel">
         <h3 id="panel-header">✨ 手势魔法指令集 ✨ <span id="toggle-icon">▼</span></h3>
         <ul id="instruction-list">
@@ -2421,6 +2439,59 @@ let gestureDetectorActive = false;
 let lastGestureTime = 0;
 let lastGestureName = '';
 const GESTURE_COOLDOWN_MS = 2000; // 全局手势冷却 2 秒
+let noGestureTimer = null;         // 无手势提示计时器
+let gestureEverDetected = false;   // 是否曾经检测到手势
+
+// 显示首次引导气泡
+function showTutorialBubble() {
+    const el = document.getElementById('gestureTutorial');
+    if (!el) return;
+    el.style.opacity = '1';
+    el.style.pointerEvents = 'auto';
+    el.style.transform = 'translateX(-50%) translateY(0)';
+    // 8 秒后自动隐藏
+    setTimeout(() => { hideTutorialBubble(); }, 8000);
+}
+function hideTutorialBubble() {
+    const el = document.getElementById('gestureTutorial');
+    if (!el) return;
+    el.style.opacity = '0';
+    el.style.pointerEvents = 'none';
+    el.style.transform = 'translateX(-50%) translateY(8px)';
+}
+
+// 显示/隐藏无手势提示
+function showNoGestureHint() {
+    const el = document.getElementById('noGestureHint');
+    if (!el) return;
+    el.style.opacity = '1';
+    el.style.transform = 'translateX(-50%) translateY(0)';
+}
+function hideNoGestureHint() {
+    const el = document.getElementById('noGestureHint');
+    if (!el) return;
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(8px)';
+}
+
+// 启动无手势检测计时器（8 秒无手势 → 提示随机演示）
+function startNoGestureTimer() {
+    if (noGestureTimer) clearTimeout(noGestureTimer);
+    noGestureTimer = setTimeout(() => {
+        // 只在从未检测到手势时提示
+        if (!gestureEverDetected) {
+            showNoGestureHint();
+        }
+    }, 8000);
+}
+function resetNoGestureTimer() {
+    hideNoGestureHint();
+    if (noGestureTimer) clearTimeout(noGestureTimer);
+    // 手势触发后，10 秒内无新手势才再次提示
+    noGestureTimer = setTimeout(() => {
+        if (!gestureEverDetected) showNoGestureHint();
+    }, 10000);
+}
 
 // 动态加载 MediaPipe Hands 脚本
 function loadMediaPipeScript(src) {
@@ -2465,7 +2536,13 @@ async function initGestureRecognition() {
         // 每 150ms 送一帧检测，平衡性能与响应速度
         detectLoop();
         console.log('[手势] MediaPipe Hands 初始化完成，开始检测');
-        showFeedback("🖐 手势识别已开启");
+        // 显示首次引导气泡
+        showTutorialBubble();
+        // 绑定关闭按钮
+        const closeBtn = document.getElementById('tutorialClose');
+        if (closeBtn) closeBtn.addEventListener('click', hideTutorialBubble);
+        // 启动无手势检测计时器
+        startNoGestureTimer();
     } catch (err) {
         console.error('[手势] 初始化失败:', err);
     }
@@ -2593,6 +2670,8 @@ function triggerGestureEffect(gesture) {
         fn();
         lastGestureTime = now;
         lastGestureName = gesture;
+        gestureEverDetected = true;  // 标记已检测到手势
+        resetNoGestureTimer();      // 重置无手势计时器
         console.log('[手势] 触发:', gesture);
     }
 }
