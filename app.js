@@ -4222,8 +4222,25 @@ if (typeof module !== 'undefined' && module.exports) {
             const data = await res.json();
             if (data.success) {
                 showToast('照片已删除', 'success');
-                // KV 最终一致性，延迟 1 秒再刷新
-                setTimeout(() => { renderPhotos(); }, 1000);
+                // KV 最终一致性 + 浏览器缓存，轮询刷新直到列表中不再包含该 key
+                let retries = 0;
+                const pollRefresh = async () => {
+                    retries++;
+                    try {
+                        const listRes = await fetch(`${PHOTO_WORKER_URL}/api/list?_t=${Date.now()}`);
+                        const listData = await listRes.json();
+                        if (listData.success) {
+                            const stillExists = listData.items.some(it => it.key === key);
+                            if (!stillExists || retries >= 6) {
+                                renderPhotos();
+                                return;
+                            }
+                        }
+                    } catch(e) {}
+                    if (retries < 6) setTimeout(pollRefresh, 800);
+                    else renderPhotos();
+                };
+                setTimeout(pollRefresh, 500);
             } else {
                 showToast('删除失败', 'error');
             }

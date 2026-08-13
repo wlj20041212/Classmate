@@ -84,12 +84,13 @@ export default {
             const key = url.searchParams.get('key');
             if (!key) return new Response('缺少 key 参数', { status: 400, headers: CORS });
 
-            const obj = await env.PHOTOS.getWithMetadata(key);
+            // 必须指定 'arrayBuffer'，否则 KV 默认返回 text，导致图片变成文本
+            const obj = await env.PHOTOS.getWithMetadata(key, 'arrayBuffer');
             if (!obj) return new Response('照片不存在', { status: 404, headers: CORS });
 
             return new Response(obj.value, {
                 headers: {
-                    'Content-Type': obj.metadata?.type || 'image/jpeg',
+                    'Content-Type': (obj.metadata && obj.metadata.type) || 'image/jpeg',
                     'Cache-Control': 'no-cache',
                     ...CORS,
                 },

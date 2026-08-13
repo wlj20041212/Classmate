@@ -628,7 +628,7 @@ window.UploadHelper = UploadHelper;
     <!-- 返回按钮 -->
     <button id="btnBack" style="position:fixed;top:12px;left:12px;z-index:9999;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);color:#fff;width:40px;height:40px;border-radius:12px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:all .2s;" title="返回主页" onmouseover="this.style.background='rgba(124,58,237,0.6)'" onmouseout="this.style.background='rgba(0,0,0,0.5)'" onclick="window.location.href='index.html'">←</button>
     <canvas id="output_canvas"></canvas>
-    <video id="camera_video" autoplay playsinline webkit-playsinline x5-playsinline muted style="position:absolute;left:-9999px;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;"></video>
+    <video id="camera_video" autoplay playsinline webkit-playsinline x5-playsinline muted style="position:absolute;left:-9999px;top:0;width:320px;height:240px;opacity:0.01;pointer-events:none;"></video>
 
     <div id="loading">
         <div class="spinner"></div>
@@ -650,7 +650,7 @@ window.UploadHelper = UploadHelper;
     </div>
 
     <!-- 无手势提示 -->
-    <div id="noGestureHint" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,10,40,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:8px 18px;z-index:9000;opacity:0;pointer-events:none;transition:opacity .4s ease,transform .4s ease;backdrop-filter:blur(8px);color:#c8b8e0;font-size:13px;white-space:nowrap;text-align:center;">
+    <div id="noGestureHint" style="position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,10,40,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:8px 18px;z-index:9000;opacity:0;pointer-events:none;transition:opacity .4s ease,transform .4s ease;backdrop-filter:blur(8px);color:#c8b8e0;font-size:13px;white-space:nowrap;text-align:center;">
         <span id="noGestureText">🎲 未检测到手势，做个手势试试！</span>
     </div>
 
