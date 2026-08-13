@@ -2643,18 +2643,58 @@ async function loadMediaPipeScript(src) {
     });
 }
 
-// 手势引擎加载提示UI
-function showGestureLoading(text) {
+// ====== 手势引擎加载（带进度百分比+下载速度+缓存）======
+// 预下载的文件 blob URL 映射：filename -> blobUrl
+const mediaPipeBlobs = {};
+// 已知文件大小（字节），用于进度计算（HEAD 请求可能不返回 content-length）
+const MP_FILE_SIZES = {
+    'hands_solution_simd_wasm_bin.wasm': 6300000,
+    'hands_solution_packed_assets.data': 4300000,
+    'hands_solution_simd_wasm_bin.js': 265000,
+    'hands_solution_packed_assets_loader.js': 8400,
+    'hands.binarypb': 550,
+};
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+}
+function formatSpeed(bps) {
+    if (bps < 1024) return Math.round(bps) + ' B/s';
+    if (bps < 1048576) return (bps / 1024).toFixed(1) + ' KB/s';
+    return (bps / 1048576).toFixed(2) + ' MB/s';
+}
+
+// 显示进度提示（圆环+百分比+速度+大小）
+function showGestureProgress(percent, speedText, sizeText) {
     let el = document.getElementById('gestureEngineLoading');
     if (!el) {
         el = document.createElement('div');
         el.id = 'gestureEngineLoading';
-        el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(20,10,40,0.92);color:#fff;padding:24px 36px;border-radius:16px;z-index:9500;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);backdrop-filter:blur(8px);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;';
-        el.innerHTML = '<div id="gestureLoadingText" style="font-size:16px;margin-bottom:12px;">正在加载手势引擎...</div><div style="width:40px;height:40px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:gestureSpin 0.8s linear infinite;margin:0 auto;"></div><style>@keyframes gestureSpin{to{transform:rotate(360deg)}}</style>';
+        el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(20,10,40,0.92);color:#fff;padding:28px 40px;border-radius:16px;z-index:9500;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);backdrop-filter:blur(8px);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;min-width:200px;';
+        el.innerHTML = ''
+            + '<div id="gestureLoadingTitle" style="font-size:15px;margin-bottom:16px;color:rgba(255,255,255,0.9);">正在加载手势引擎</div>'
+            + '<div style="position:relative;width:90px;height:90px;margin:0 auto 14px;">'
+            +   '<svg width="90" height="90">'
+            +     '<circle cx="45" cy="45" r="40" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="5"/>'
+            +     '<circle id="gestureProgressCircle" cx="45" cy="45" r="40" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33" transform="rotate(-90 45 45)"/>'
+            +   '</svg>'
+            +   '<div id="gestureProgressPercent" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;font-weight:700;">0%</div>'
+            + '</div>'
+            + '<div id="gestureProgressSpeed" style="font-size:13px;color:rgba(255,255,255,0.75);margin-bottom:3px;">准备中...</div>'
+            + '<div id="gestureProgressSize" style="font-size:12px;color:rgba(255,255,255,0.5);">0 / 0</div>'
+            + '<div id="gestureProgressHint" style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:10px;">首次加载较慢，之后秒开</div>';
         document.body.appendChild(el);
     }
-    const textEl = document.getElementById('gestureLoadingText');
-    if (textEl && text) textEl.textContent = text;
+    const circle = document.getElementById('gestureProgressCircle');
+    const circumference = 251.33; // 2 * π * 40
+    const clampedPercent = Math.max(0, Math.min(100, percent));
+    circle.style.transition = 'stroke-dashoffset 0.2s ease';
+    circle.style.strokeDashoffset = String(circumference * (1 - clampedPercent / 100));
+    document.getElementById('gestureProgressPercent').textContent = Math.round(clampedPercent) + '%';
+    if (speedText !== undefined) document.getElementById('gestureProgressSpeed').textContent = speedText;
+    if (sizeText !== undefined) document.getElementById('gestureProgressSize').textContent = sizeText;
     el.style.display = 'block';
 }
 function hideGestureLoading() {
@@ -2662,9 +2702,103 @@ function hideGestureLoading() {
     if (el) el.style.display = 'none';
 }
 
+// 预下载模型文件（带进度），存入 Cache Storage + 内存 blob URL
+async function prefetchMediaPipeFiles(base) {
+    const FILES = Object.keys(MP_FILE_SIZES);
+    let totalSize = 0;
+    for (const f of FILES) totalSize += MP_FILE_SIZES[f];
+
+    // 尝试打开缓存
+    let cache = null;
+    try {
+        cache = await caches.open('mediapipe-hands-v1');
+    } catch (e) {
+        console.warn('[手势] Cache Storage 不可用:', e.message);
+    }
+
+    let downloadedSize = 0;
+    const startTime = Date.now();
+
+    for (const file of FILES) {
+        const url = base + file;
+
+        // 1. 先检查内存
+        if (mediaPipeBlobs[file]) {
+            downloadedSize += MP_FILE_SIZES[file];
+            showGestureProgress(
+                (downloadedSize / totalSize) * 100,
+                '已加载',
+                formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
+            );
+            continue;
+        }
+
+        // 2. 检查 Cache Storage
+        if (cache) {
+            const cached = await cache.match(url);
+            if (cached) {
+                const blob = await cached.blob();
+                mediaPipeBlobs[file] = URL.createObjectURL(blob);
+                downloadedSize += blob.size || MP_FILE_SIZES[file];
+                showGestureProgress(
+                    (downloadedSize / totalSize) * 100,
+                    '从缓存加载（秒开）',
+                    formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
+                );
+                console.log('[手势] 缓存命中:', file);
+                continue;
+            }
+        }
+
+        // 3. 网络下载（带进度）
+        console.log('[手势] 下载:', url);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('下载失败 ' + file + ': HTTP ' + response.status);
+
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedLength = 0;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            receivedLength += value.length;
+            downloadedSize += value.length;
+
+            const percent = (downloadedSize / totalSize) * 100;
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? (receivedLength / elapsed) : 0;
+
+            showGestureProgress(
+                percent,
+                formatSpeed(speed),
+                formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
+            );
+        }
+
+        // 组装 Blob
+        const blob = new Blob(chunks);
+        mediaPipeBlobs[file] = URL.createObjectURL(blob);
+
+        // 存入 Cache Storage 供下次秒开
+        if (cache) {
+            try {
+                const cachedResponse = new Response(blob);
+                await cache.put(url, cachedResponse);
+                console.log('[手势] 已缓存:', file);
+            } catch (e) {
+                console.warn('[手势] 缓存写入失败:', file, e.message);
+            }
+        }
+    }
+
+    showGestureProgress(100, '加载完成', '');
+}
+
 // 初始化手势识别（摄像头成功后调用）
 async function initGestureRecognition() {
-    if (gestureDetectorActive) return; // 避免重复初始化
+    if (gestureDetectorActive) return;
     const camVideo = document.getElementById('camera_video');
     if (!camVideo || camVideo.readyState < 2) {
         console.warn('[手势] 视频未就绪，稍后重试, readyState:', camVideo ? camVideo.readyState : 'no video');
@@ -2672,11 +2806,11 @@ async function initGestureRecognition() {
         return;
     }
 
-    // 显示加载提示
-    showGestureLoading('正在加载手势引擎...');
+    // 显示下载进度
+    showGestureProgress(0, '准备下载...', '0 / ' + formatSize(11000000));
 
     try {
-        // 加载 MediaPipe Hands：本地文件优先（100%稳定），CDN 作为 fallback
+        // 本地路径优先，CDN 作为 fallback
         const LOCAL_BASE = './mediapipe/';
         const SOURCES = [
             { url: LOCAL_BASE + 'hands.js', base: LOCAL_BASE, name: '本地' },
@@ -2688,16 +2822,20 @@ async function initGestureRecognition() {
         let handsReady = false;
         for (const src of SOURCES) {
             try {
-                console.log('[手势] 尝试加载 hands.js:', src.name, src.url);
-                // loadMediaPipeScript 内部已处理 window.Hands 已存在的情况
+                // 预下载模型文件（带进度显示），只有本地源可以预下载
+                // CDN 源不支持跨域 fetch 流式读取，跳过预下载，让 MediaPipe 内部自己加载
+                if (src.base === LOCAL_BASE) {
+                    await prefetchMediaPipeFiles(src.base);
+                }
+
+                console.log('[手势] 尝试加载 hands.js:', src.name);
                 await loadMediaPipeScript(src.url);
                 if (!window.Hands) continue;
 
-                showGestureLoading('正在加载手势模型（约11MB）...');
-
                 // 创建 Hands 实例
+                // locateFile 优先返回预下载的 blob URL（本地源），否则返回原始URL
                 const instance = new Hands({
-                    locateFile: (file) => src.base + file
+                    locateFile: (file) => mediaPipeBlobs[file] || (src.base + file)
                 });
                 instance.setOptions({
                     maxNumHands: 1,
@@ -2707,8 +2845,8 @@ async function initGestureRecognition() {
                 });
                 instance.onResults(onHandResults);
 
-                // 预热验证：发送一帧测试帧，确认 WASM 模型真正加载成功
-                console.log('[手势] 预热验证中（等待WASM模型下载）...');
+                // 预热验证：发送测试帧确认 WASM 模型真正可用
+                console.log('[手势] 预热验证中...');
                 const warmupCanvas = document.createElement('canvas');
                 warmupCanvas.width = 64;
                 warmupCanvas.height = 48;
@@ -2721,7 +2859,6 @@ async function initGestureRecognition() {
                     new Promise((_, reject) => setTimeout(() => reject(new Error('预热超时(30s)')), 30000))
                 ]);
 
-                // 预热成功！模型可用
                 handsInstance = instance;
                 gestureDetectorActive = true;
                 handsReady = true;
@@ -2729,7 +2866,6 @@ async function initGestureRecognition() {
                 break;
             } catch (e) {
                 console.warn('[手势] 加载失败:', src.name, e.message);
-                // 清理失败的实例
                 try { if (typeof instance !== 'undefined' && instance) instance.close && instance.close(); } catch(_) {}
             }
         }
@@ -2738,12 +2874,9 @@ async function initGestureRecognition() {
             throw new Error('所有手势引擎源均加载失败');
         }
 
-        // 加载成功，隐藏提示
         hideGestureLoading();
-        // 开始检测循环
         detectLoop();
         console.log('[手势] MediaPipe Hands 初始化完成，开始检测');
-        // 显示首次引导气泡
         showTutorialBubble();
         const closeBtn = document.getElementById('tutorialClose');
         if (closeBtn) closeBtn.addEventListener('click', hideTutorialBubble);
@@ -2751,7 +2884,6 @@ async function initGestureRecognition() {
     } catch (err) {
         console.error('[手势] 初始化失败:', err);
         hideGestureLoading();
-        // 不降级到不准确的本地肤色检测，直接提示用户
         setNoGestureText('⚠️ 手势引擎加载失败，请刷新页面重试');
         showNoGestureHint();
     }
