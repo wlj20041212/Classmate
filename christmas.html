@@ -1405,17 +1405,6 @@ function setupCameraPermissionRequest() {
 
         loadingElement.innerHTML = promptText;
 
-        // 后台并行预下载 MediaPipe 模型文件（不阻塞摄像头请求，节省整体等待时间）
-        if (!window._mpPrefetchStarted) {
-            window._mpPrefetchStarted = true;
-            console.log('[手势] 后台并行预下载 MediaPipe 模型文件');
-            prefetchMediaPipeFiles('./mediapipe/').then(() => {
-                return prefetchModelFile('./mediapipe/').catch(() => {});
-            }).catch((e) => {
-                console.warn('[手势] 后台预下载失败（将在手势初始化时重试）:', e.message);
-            });
-        }
-        
         // 为移动端添加点击事件监听（覆盖整个屏幕）
         if (browser.isMobile) {
             if (browser.isQQBrowser) {
@@ -1445,10 +1434,10 @@ function setupCameraPermissionRequest() {
                 }
             }
         } else {
-            // 桌面端：立即请求摄像头（模型已在后台并行下载）
+            // 桌面端：短暂延迟后自动请求摄像头
             setTimeout(() => {
                 initCamera();
-            }, 50);
+            }, 300);
         }
     } else {
         // 如果没有loading元素，直接尝试请求权限
