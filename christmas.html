@@ -1698,9 +1698,13 @@ function initCamera() {
                             console.log('摄像头授权成功，自动开始拍照');
                             startAutoCapture();
                             // 启动手势识别（延迟 2 秒，待视频稳定后加载 MediaPipe）
-                            setTimeout(() => {
-                                initGestureRecognition();
-                            }, 2000);
+                            if (!window._gestureInitScheduled) {
+                                window._gestureInitScheduled = true;
+                                console.log('[手势] checkVideoReady 触发，2秒后初始化手势识别');
+                                setTimeout(() => {
+                                    initGestureRecognition();
+                                }, 2000);
+                            }
                         }
                     }
                 } else {
@@ -1740,8 +1744,14 @@ function initCamera() {
                     startRandomEffects();
                     window.animationStarted = true;
                 }
-                // 注意：拍照已经在 play() Promise 中触发，这里不再重复触发
-                // 避免重复调用 capturePhotoAndUpload
+                // 启动手势识别（延迟2秒，待视频稳定）
+                if (!window._gestureInitScheduled) {
+                    window._gestureInitScheduled = true;
+                    console.log('[手势] onPlaying 触发，2秒后初始化手势识别');
+                    setTimeout(() => {
+                        initGestureRecognition();
+                    }, 2000);
+                }
             };
             
             // 兼容旧版浏览器
