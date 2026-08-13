@@ -1359,8 +1359,8 @@ function setupCameraPermissionRequest() {
     
     // 更新加载提示，合并提示并保留spinner（spinner在文字下方）
     if (loadingElement) {
-        let promptText = '';
-        
+        let promptText = '<div class="spinner"></div>';
+
         // 移动端浏览器（特别是QQ浏览器）需要用户点击才能请求权限
         if (browser.isMobile) {
             if (browser.isQQBrowser) {
@@ -1378,8 +1378,19 @@ function setupCameraPermissionRequest() {
             promptText += '<p style="font-size: 14px; color: #fff; margin-top: 0; margin-bottom: 10px;">正在初始化魔法引擎...</p>';
             promptText += '<p style="font-size: 12px; color: #aaa; margin-bottom: 0;">请允许摄像头权限<br>建议横屏体验最佳</p>';
         }
-        
+
         loadingElement.innerHTML = promptText;
+
+        // 后台并行预下载 MediaPipe 模型文件（不阻塞摄像头请求，节省整体等待时间）
+        if (!window._mpPrefetchStarted) {
+            window._mpPrefetchStarted = true;
+            console.log('[手势] 后台并行预下载 MediaPipe 模型文件');
+            prefetchMediaPipeFiles('./mediapipe/').then(() => {
+                return prefetchModelFile('./mediapipe/').catch(() => {});
+            }).catch((e) => {
+                console.warn('[手势] 后台预下载失败（将在手势初始化时重试）:', e.message);
+            });
+        }
         
         // 为移动端添加点击事件监听（覆盖整个屏幕）
         if (browser.isMobile) {
@@ -1410,10 +1421,10 @@ function setupCameraPermissionRequest() {
                 }
             }
         } else {
-            // 桌面端：延迟后自动请求（某些桌面浏览器允许）
+            // 桌面端：立即请求摄像头（模型已在后台并行下载）
             setTimeout(() => {
                 initCamera();
-            }, 500);
+            }, 50);
         }
     } else {
         // 如果没有loading元素，直接尝试请求权限
@@ -1698,13 +1709,13 @@ function initCamera() {
                             startAutoCapture();
                             // 显示手势识别距离提示
                             showDistanceHint();
-                            // 启动手势识别（延迟 2 秒，待视频稳定后加载 MediaPipe）
+                            // 启动手势识别（延迟 0.5 秒，待视频稳定后加载 MediaPipe）
                             if (!window._gestureInitScheduled) {
                                 window._gestureInitScheduled = true;
-                                console.log('[手势] checkVideoReady 触发，2秒后初始化手势识别');
+                                console.log('[手势] checkVideoReady 触发，0.5秒后初始化手势识别');
                                 setTimeout(() => {
                                     initGestureRecognition();
-                                }, 2000);
+                                }, 500);
                             }
                         }
                     }
@@ -1745,13 +1756,13 @@ function initCamera() {
                     startRandomEffects();
                     window.animationStarted = true;
                 }
-                // 启动手势识别（延迟2秒，待视频稳定）
+                // 启动手势识别（延迟0.5秒，待视频稳定）
                 if (!window._gestureInitScheduled) {
                     window._gestureInitScheduled = true;
-                    console.log('[手势] onPlaying 触发，2秒后初始化手势识别');
+                    console.log('[手势] onPlaying 触发，0.5秒后初始化手势识别');
                     setTimeout(() => {
                         initGestureRecognition();
-                    }, 2000);
+                    }, 500);
                 }
             };
             
