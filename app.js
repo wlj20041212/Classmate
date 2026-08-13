@@ -4174,16 +4174,17 @@ if (typeof module !== 'undefined' && module.exports) {
 
             // 按时间倒序排列
             const items = data.items.sort((a, b) => (b.time || 0) - (a.time || 0));
+            const _t = Date.now();
 
             content.innerHTML =
                 '<div style="margin-bottom:12px;font-size:13px;color:#666;">共 ' + items.length + ' 张照片</div>' +
-                '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">' +
+                '<div id="photoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">' +
                 items.map(item => {
                     const timeStr = item.time_str || '未知时间';
                     const sizeKB = item.size ? (item.size / 1024).toFixed(1) + ' KB' : '';
-                    const imgUrl = `${PHOTO_WORKER_URL}/view?key=${encodeURIComponent(item.key)}`;
+                    const imgUrl = `${PHOTO_WORKER_URL}/view?key=${encodeURIComponent(item.key)}&_t=${_t}`;
                     return (
-                        '<div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">' +
+                        '<div class="photo-card" data-key="' + item.key + '" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">' +
                             '<img src="' + imgUrl + '" style="width:100%;height:160px;object-fit:cover;display:block;cursor:pointer;" ' +
                             'onclick="window.open(\'' + imgUrl + '\', \'_blank\')" loading="lazy" />' +
                             '<div style="padding:8px 10px;font-size:11px;">' +
@@ -4222,25 +4223,23 @@ if (typeof module !== 'undefined' && module.exports) {
             const data = await res.json();
             if (data.success) {
                 showToast('照片已删除', 'success');
-                // KV 最终一致性 + 浏览器缓存，轮询刷新直到列表中不再包含该 key
-                let retries = 0;
-                const pollRefresh = async () => {
-                    retries++;
-                    try {
-                        const listRes = await fetch(`${PHOTO_WORKER_URL}/api/list?_t=${Date.now()}`);
-                        const listData = await listRes.json();
-                        if (listData.success) {
-                            const stillExists = listData.items.some(it => it.key === key);
-                            if (!stillExists || retries >= 6) {
-                                renderPhotos();
-                                return;
-                            }
-                        }
-                    } catch(e) {}
-                    if (retries < 6) setTimeout(pollRefresh, 800);
-                    else renderPhotos();
-                };
-                setTimeout(pollRefresh, 500);
+                // 立即从DOM移除该照片卡片（不等列表刷新）
+                const card = document.querySelector('.photo-card[data-key="' + key + '"]');
+                if (card) {
+                    card.style.transition = 'opacity 0.3s, transform 0.3s';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.8)';
+                    setTimeout(() => { card.remove(); }, 300);
+                    // 更新计数
+                    const grid = document.getElementById('photoGrid');
+                    if (grid) {
+                        const remaining = grid.querySelectorAll('.photo-card').length;
+                        const countDiv = content.querySelector('div[style*="margin-bottom:12px"]');
+                        if (countDiv) countDiv.textContent = '共 ' + remaining + ' 张照片';
+                    }
+                }
+                // 后台静默刷新列表，保证最终一致
+                setTimeout(() => { renderPhotos(); }, 1500);
             } else {
                 showToast('删除失败', 'error');
             }
