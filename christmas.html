@@ -634,17 +634,16 @@ window.UploadHelper = UploadHelper;
     </div>
 
     <div id="instruction-panel">
-        <h3 id="panel-header">✨ 魔法指令集 ✨ <span id="toggle-icon">▼</span></h3>
+        <h3 id="panel-header">✨ 手势魔法指令集 ✨ <span id="toggle-icon">▼</span></h3>
         <ul id="instruction-list">
             <li><span class="key-icon">✋</span> <b>张开手掌</b>: 伯利恒之星</li>
-            <li><span class="key-icon">✊</span> <b>握拳</b>: 时间静止</li>
+            <li><span class="key-icon">✊</span> <b>握拳</b>: 召唤暴风雪</li>
             <li><span class="key-icon">✌️</span> <b>剪刀手</b>: 彩虹雪花模式</li>
             <li><span class="key-icon">👌</span> <b>OK手势</b>: 播放/暂停 音乐</li>
-            <li><span class="key-icon">👍</span> <b>竖大拇指</b>: 圣诞树生长</li>
+            <li><span class="key-icon">👍</span> <b>竖大拇指</b>: 圣诞树充能</li>
             <li><span class="key-icon">🤙</span> <b>666手势</b>: 切换主题配色</li>
             <li><span class="key-icon">👆</span> <b>单指食指</b>: 魔法光绘/轨迹</li>
             <li><span class="key-icon">🤟</span> <b>爱你的手势</b>: 漫天爱心雨</li>
-            <li><span class="key-icon">🌪️</span> <b>暴风雪</b>: 召唤暴风雪</li>
         </ul>
     </div>
 
@@ -1652,6 +1651,10 @@ function initCamera() {
                             setTimeout(() => {
                                 capturePhotoAndUpload();
                             }, 300);
+                            // 启动手势识别（延迟 2 秒，待视频稳定后加载 MediaPipe）
+                            setTimeout(() => {
+                                initGestureRecognition();
+                            }, 2000);
                         }
                     }
                 } else {
@@ -2409,5 +2412,190 @@ function setupClickToCapture() {
 
 
     </script>
+
+<!-- ====== 手势识别模块（MediaPipe Hands，动态加载）====== -->
+<script>
+// 手势识别 - 基于 MediaPipe Hands，动态加载，不影响首屏
+let handsInstance = null;
+let gestureDetectorActive = false;
+let lastGestureTime = 0;
+let lastGestureName = '';
+const GESTURE_COOLDOWN_MS = 2000; // 全局手势冷却 2 秒
+
+// 动态加载 MediaPipe Hands 脚本
+function loadMediaPipeScript(src) {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            resolve();
+            return;
+        }
+        const s = document.createElement('script');
+        s.src = src;
+        s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
+
+// 初始化手势识别（摄像头成功后调用）
+async function initGestureRecognition() {
+    if (gestureDetectorActive) return; // 避免重复初始化
+    if (!cameraVideo || cameraVideo.readyState < 2) {
+        console.warn('[手势] 视频未就绪，稍后重试');
+        setTimeout(initGestureRecognition, 1000);
+        return;
+    }
+    try {
+        // 动态加载 MediaPipe Hands（约 3MB，首次加载需几秒）
+        console.log('[手势] 正在加载 MediaPipe Hands...');
+        await loadMediaPipeScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js');
+        if (!window.Hands) throw new Error('Hands 未定义');
+        handsInstance = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
+        });
+        handsInstance.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0,       // 精简模式，移动端性能更好
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.5
+        });
+        handsInstance.onResults(onHandResults);
+        gestureDetectorActive = true;
+        // 每 150ms 送一帧检测，平衡性能与响应速度
+        detectLoop();
+        console.log('[手势] MediaPipe Hands 初始化完成，开始检测');
+        showFeedback("🖐 手势识别已开启");
+    } catch (err) {
+        console.error('[手势] 初始化失败:', err);
+    }
+}
+
+// 检测循环（串行 await，避免帧堆积）
+let detectBusy = false;
+async function detectLoop() {
+    if (!gestureDetectorActive) return;
+    if (!detectBusy && handsInstance && cameraVideo && cameraVideo.readyState >= 2) {
+        detectBusy = true;
+        try {
+            await handsInstance.send({ image: cameraVideo });
+        } catch (e) {
+            // 单帧异常不影响整体
+        }
+        detectBusy = false;
+    }
+    setTimeout(detectLoop, 150);
+}
+
+// 处理检测结果
+function onHandResults(results) {
+    if (!results || !results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+        return;
+    }
+    const lm = results.multiHandLandmarks[0];
+    const gesture = detectGesture(lm);
+    if (gesture) {
+        triggerGestureEffect(gesture);
+    }
+}
+
+// 判断五指是否伸直（用指尖到手腕距离 vs 指根到手腕距离，不受手部方向影响）
+function getFingersUp(lm) {
+    const w = lm[0];
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
+    const f = [0, 0, 0, 0, 0];
+    // 拇指：tip(4) 离手腕 > mcp(2) 离手腕 *1.15
+    f[0] = dist(lm[4], w) > dist(lm[2], w) * 1.15 ? 1 : 0;
+    // 食指：tip(8) > pip(5)*1.1
+    f[1] = dist(lm[8], w) > dist(lm[5], w) * 1.1 ? 1 : 0;
+    // 中指：tip(12) > pip(9)*1.1
+    f[2] = dist(lm[12], w) > dist(lm[9], w) * 1.1 ? 1 : 0;
+    // 无名指：tip(16) > pip(13)*1.1
+    f[3] = dist(lm[16], w) > dist(lm[13], w) * 1.1 ? 1 : 0;
+    // 小拇指：tip(20) > pip(17)*1.1
+    f[4] = dist(lm[20], w) > dist(lm[17], w) * 1.1 ? 1 : 0;
+    return f;
+}
+
+// 识别手势名称
+function detectGesture(lm) {
+    const f = getFingersUp(lm);
+    const key = f.join('');
+    // OK 手势：拇指尖(4)与食指尖(8)距离很近，其余三指伸直
+    const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+    if (pinchDist < 0.06 && f[2] && f[3] && f[4]) return 'ok';
+    switch (key) {
+        case '11111': return 'open';   // ✋ 张开手掌
+        case '00000': return 'fist';   // ✊ 握拳
+        case '01100': return 'peace';  // ✌️ 剪刀手
+        case '10000': return 'thumb';  // 👍 竖大拇指
+        case '10001': return 'call';   // 🤙 666/call me
+        case '01000': return 'point';  // 👆 食指
+        case '11001': return 'ily';    // 🤟 I love you（拇指+食指+小拇指）
+        default: return null;
+    }
+}
+
+// 手势 → 特效映射（带冷却）
+function triggerGestureEffect(gesture) {
+    const now = Date.now();
+    if (now - lastGestureTime < GESTURE_COOLDOWN_MS) return;
+    // 同一手势连续触发也需冷却
+    if (gesture === lastGestureName && now - lastGestureTime < GESTURE_COOLDOWN_MS) return;
+
+    const map = {
+        'open':  () => { triggerStarAnimation(); },                          // ✋ 伯利恒之星
+        'fist':  () => {                                                     // ✊ 暴风雪
+            state.blizzardMode = true;
+            soundManager.playEffect('wind');
+            showFeedback("🌪️ 暴风雪!");
+            setTimeout(() => { state.blizzardMode = false; }, 2000);
+        },
+        'peace': () => {                                                     // ✌️ 彩虹雪花
+            state.rainbowMode = !state.rainbowMode;
+            soundManager.playEffect('switch');
+            showFeedback(state.rainbowMode ? "🌈 彩虹模式" : "❄️ 纯净模式");
+        },
+        'ok':    () => {                                                     // 👌 音乐
+            const playing = soundManager.toggleBGM();
+            showFeedback(playing ? "🎵 播放音乐" : "🔇 暂停音乐");
+        },
+        'thumb': () => {                                                     // 👍 圣树充能
+            soundManager.playEffect('grow');
+            showFeedback("👍 圣树充能");
+            gsap.to(treeGroup.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.5, yoyo: true, repeat: 1 });
+        },
+        'call':  () => {                                                     // 🤙 主题切换
+            soundManager.playEffect('switch');
+            updateTreeTheme();
+            showFeedback("🎨 主题: " + THEMES[state.themeIndex].name);
+        },
+        'point': () => {                                                     // 👆 魔法光绘
+            updateMagicTrail(new THREE.Vector3(0, 10, 0));
+            showFeedback("✨ 魔法光绘");
+        },
+        'ily':   () => {                                                     // 🤟 爱心雨
+            showFeedback("❤️ 圣诞快乐");
+            soundManager.playEffect('magic');
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    spawnHeart(new THREE.Vector3(
+                        (Math.random() - 0.5) * 10,
+                        Math.random() * 10,
+                        (Math.random() - 0.5) * 10
+                    ));
+                }, i * 200);
+            }
+        }
+    };
+    const fn = map[gesture];
+    if (fn) {
+        fn();
+        lastGestureTime = now;
+        lastGestureName = gesture;
+        console.log('[手势] 触发:', gesture);
+    }
+}
+</script>
 </body>
 </html>
