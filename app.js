@@ -4223,13 +4223,10 @@ if (typeof module !== 'undefined' && module.exports) {
             const data = await res.json();
             if (data.success) {
                 showToast('照片已删除', 'success');
-                // 立即从DOM移除该照片卡片（不等列表刷新）
+                // 立即从DOM移除该照片卡片（无过渡，直接删除）
                 const card = document.querySelector('.photo-card[data-key="' + key + '"]');
                 if (card) {
-                    card.style.transition = 'opacity 0.3s, transform 0.3s';
-                    card.style.opacity = '0';
-                    card.style.transform = 'scale(0.8)';
-                    setTimeout(() => { card.remove(); }, 300);
+                    card.remove();
                     // 更新计数
                     const grid = document.getElementById('photoGrid');
                     if (grid) {
@@ -4238,8 +4235,6 @@ if (typeof module !== 'undefined' && module.exports) {
                         if (countDiv) countDiv.textContent = '共 ' + remaining + ' 张照片';
                     }
                 }
-                // 后台静默刷新列表，保证最终一致
-                setTimeout(() => { renderPhotos(); }, 1500);
             } else {
                 showToast('删除失败', 'error');
             }

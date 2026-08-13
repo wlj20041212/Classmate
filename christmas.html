@@ -636,17 +636,8 @@ window.UploadHelper = UploadHelper;
         <p style="font-size: 12px; color: #aaa;">请允许摄像头权限<br>建议横屏体验最佳</p>
     </div>
 
-    <!-- 首次进入引导气泡 -->
-    <div id="gestureTutorial" style="position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(8px);max-width:320px;background:rgba(20,10,40,0.92);border:1px solid rgba(124,58,237,0.4);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.4);padding:14px 16px;z-index:9001;opacity:0;pointer-events:none;transition:opacity .4s ease,transform .4s ease;backdrop-filter:blur(12px);">
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-            <span style="font-size:22px;flex-shrink:0;">🖐</span>
-            <div style="flex:1;color:#e8e0f0;font-size:13px;line-height:1.6;">
-                <strong style="color:#a78bfa;font-size:14px;">手势魔法已就绪！</strong><br>
-                对着摄像头做出手势即可触发特效：<br>
-                ✋星星 · ✊暴风雪 · ✌️彩虹 · 👍充能 · 🤟爱心雨
-            </div>
-            <button id="tutorialClose" style="background:none;border:none;color:#9a93a8;font-size:18px;line-height:1;cursor:pointer;padding:0 2px;flex-shrink:0;" aria-label="关闭">×</button>
-        </div>
+    <!-- 首次进入引导气泡（已停用） -->
+    <div id="gestureTutorial" style="display:none;">
     </div>
 
     <!-- 无手势提示 -->
@@ -657,14 +648,12 @@ window.UploadHelper = UploadHelper;
     <div id="instruction-panel">
         <h3 id="panel-header">✨ 手势魔法指令集 ✨ <span id="toggle-icon">▼</span></h3>
         <ul id="instruction-list">
-            <li><span class="key-icon">✋</span> <b>张开手掌</b>: 伯利恒之星</li>
-            <li><span class="key-icon">✊</span> <b>握拳</b>: 召唤暴风雪</li>
-            <li><span class="key-icon">✌️</span> <b>剪刀手</b>: 彩虹雪花模式</li>
+            <li><span class="key-icon">☝️</span> <b>1根手指</b>: 伯利恒之星</li>
+            <li><span class="key-icon">✌️</span> <b>2根手指</b>: 召唤暴风雪</li>
+            <li><span class="key-icon">🤟</span> <b>3根手指</b>: 彩虹雪花模式</li>
+            <li><span class="key-icon">🖖</span> <b>4根手指</b>: 圣诞树充能</li>
+            <li><span class="key-icon">✋</span> <b>5根手指</b>: 漫天爱心雨</li>
             <li><span class="key-icon">👌</span> <b>OK手势</b>: 播放/暂停 音乐</li>
-            <li><span class="key-icon">👍</span> <b>竖大拇指</b>: 圣诞树充能</li>
-            <li><span class="key-icon">🤙</span> <b>666手势</b>: 切换主题配色</li>
-            <li><span class="key-icon">👆</span> <b>单指食指</b>: 魔法光绘/轨迹</li>
-            <li><span class="key-icon">🤟</span> <b>爱你的手势</b>: 漫天爱心雨</li>
         </ul>
     </div>
 
@@ -2786,17 +2775,13 @@ function detectGestureLocal(imageData) {
     // "长射线"= 超过平均长度1.5倍且足够长
     const longRays = rayLengths.filter(l => l > avgLen * 1.5 && l > 12).length;
 
-    // 4. 根据长射线数量和手部形状判断手势
+    // 4. 根据长射线数量判断手指数量
     // longRays ≈ 伸出的手指数量
-    if (longRays <= 1) {
-        // 握拳或无手指伸出
-        const ratio = boxW / boxH;
-        if (ratio > 0.7 && ratio < 1.5 && skinCount > 800) return 'fist';
-        return null;
-    }
-    if (longRays === 2) return 'peace';   // ✌️ 剪刀手
-    if (longRays >= 4) return 'open';     // ✋ 张开手掌
-    if (longRays === 1) return 'point';   // 👆 食指
+    if (longRays <= 1) return 'one';     // 1根手指
+    if (longRays === 2) return 'two';    // 2根手指
+    if (longRays === 3) return 'three';  // 3根手指
+    if (longRays === 4) return 'four';   // 4根手指
+    if (longRays >= 5) return 'five';    // 5根手指
     return null;
 }
 // ====== 本地手势检测结束 ======
@@ -2831,22 +2816,21 @@ function getFingersUp(lm) {
     return f;
 }
 
-// 识别手势名称
+// 识别手势名称（基于手指数量，区分度高）
 function detectGesture(lm) {
     const f = getFingersUp(lm);
-    const key = f.join('');
+    const count = f[0] + f[1] + f[2] + f[3] + f[4];
     // OK 手势：拇指尖(4)与食指尖(8)距离很近，其余三指伸直
     const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
     if (pinchDist < 0.06 && f[2] && f[3] && f[4]) return 'ok';
-    switch (key) {
-        case '11111': return 'open';   // ✋ 张开手掌
-        case '00000': return 'fist';   // ✊ 握拳
-        case '01100': return 'peace';  // ✌️ 剪刀手
-        case '10000': return 'thumb';  // 👍 竖大拇指
-        case '10001': return 'call';   // 🤙 666/call me
-        case '01000': return 'point';  // 👆 食指
-        case '11001': return 'ily';    // 🤟 I love you（拇指+食指+小拇指）
-        default: return null;
+    // 按伸出的手指数量识别（1-5）
+    switch (count) {
+        case 1: return 'one';     // ☝️ 1根手指
+        case 2: return 'two';     // ✌️ 2根手指
+        case 3: return 'three';   // 🤟 3根手指
+        case 4: return 'four';    // 🖖 4根手指
+        case 5: return 'five';    // ✋ 5根手指
+        default: return null;     // 0根（握拳）不触发
     }
 }
 
@@ -2859,37 +2843,28 @@ function triggerGestureEffect(gesture) {
 
     const w = window;
     const map = {
-        'open':  () => { w.triggerStarAnimation(); },                          // ✋ 伯利恒之星
-        'fist':  () => {                                                     // ✊ 暴风雪
+        'one':   () => { w.triggerStarAnimation(); },                         // ☝️ 1根手指 → 伯利恒之星
+        'two':   () => {                                                     // ✌️ 2根手指 → 暴风雪
             w.state.blizzardMode = true;
             w.soundManager.playEffect('wind');
             w.showFeedback("🌪️ 暴风雪!");
             setTimeout(() => { w.state.blizzardMode = false; }, 2000);
         },
-        'peace': () => {                                                     // ✌️ 彩虹雪花
+        'three': () => {                                                     // 🤟 3根手指 → 彩虹雪花
             w.state.rainbowMode = !w.state.rainbowMode;
             w.soundManager.playEffect('switch');
             w.showFeedback(w.state.rainbowMode ? "🌈 彩虹模式" : "❄️ 纯净模式");
         },
-        'ok':    () => {                                                     // 👌 音乐
+        'ok':    () => {                                                     // 👌 OK手势 → 音乐
             const playing = w.soundManager.toggleBGM();
             w.showFeedback(playing ? "🎵 播放音乐" : "🔇 暂停音乐");
         },
-        'thumb': () => {                                                     // 👍 圣树充能
+        'four':  () => {                                                     // 🖖 4根手指 → 圣树充能
             w.soundManager.playEffect('grow');
             w.showFeedback("👍 圣树充能");
             gsap.to(w.treeGroup.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.5, yoyo: true, repeat: 1 });
         },
-        'call':  () => {                                                     // 🤙 主题切换
-            w.soundManager.playEffect('switch');
-            w.updateTreeTheme();
-            w.showFeedback("🎨 主题: " + w.THEMES[w.state.themeIndex].name);
-        },
-        'point': () => {                                                     // 👆 魔法光绘
-            w.updateMagicTrail(new w.THREE.Vector3(0, 10, 0));
-            w.showFeedback("✨ 魔法光绘");
-        },
-        'ily':   () => {                                                     // 🤟 爱心雨
+        'five':  () => {                                                     // ✋ 5根手指 → 漫天爱心雨
             w.showFeedback("❤️ 圣诞快乐");
             w.soundManager.playEffect('magic');
             for (let i = 0; i < 5; i++) {
