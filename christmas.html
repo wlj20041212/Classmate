@@ -2702,9 +2702,11 @@ function hideGestureLoading() {
     if (el) el.style.display = 'none';
 }
 
-// 预下载模型文件（并行下载，带聚合进度），存入 Cache Storage + 内存 blob URL
+// 预下载模型文件（串行下载，小文件优先，进度平滑），存入 Cache Storage + 内存 blob URL
 async function prefetchMediaPipeFiles(base) {
-    const FILES = Object.keys(MP_FILE_SIZES);
+    const allFiles = Object.keys(MP_FILE_SIZES);
+    // 小文件先下载（用户能快速看到进度变化）
+    const FILES = allFiles.sort((a, b) => MP_FILE_SIZES[a] - MP_FILE_SIZES[b]);
     let totalSize = 0;
     for (const f of FILES) totalSize += MP_FILE_SIZES[f];
 
@@ -2716,34 +2718,21 @@ async function prefetchMediaPipeFiles(base) {
         console.warn('[手势] Cache Storage 不可用:', e.message);
     }
 
+    let downloadedSize = 0;
     const startTime = Date.now();
-    // 每个文件的已下载字节数（用于聚合进度）
-    const fileProgress = {};
-    for (const f of FILES) fileProgress[f] = 0;
 
-    // 更新总进度的辅助函数
-    function updateTotalProgress() {
-        let downloaded = 0;
-        for (const f of FILES) downloaded += fileProgress[f];
-        const percent = (downloaded / totalSize) * 100;
-        const elapsed = (Date.now() - startTime) / 1000;
-        const speed = elapsed > 0 ? (downloaded / elapsed) : 0;
-        showGestureProgress(
-            percent,
-            formatSpeed(speed),
-            formatSize(downloaded) + ' / ' + formatSize(totalSize)
-        );
-    }
-
-    // 单个文件的下载函数（带进度回调）
-    async function downloadFile(file) {
+    for (const file of FILES) {
         const url = base + file;
 
         // 1. 先检查内存
         if (mediaPipeBlobs[file]) {
-            fileProgress[file] = MP_FILE_SIZES[file];
-            updateTotalProgress();
-            return;
+            downloadedSize += MP_FILE_SIZES[file];
+            showGestureProgress(
+                (downloadedSize / totalSize) * 100,
+                '已加载',
+                formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
+            );
+            continue;
         }
 
         // 2. 检查 Cache Storage
@@ -2752,14 +2741,18 @@ async function prefetchMediaPipeFiles(base) {
             if (cached) {
                 const blob = await cached.blob();
                 mediaPipeBlobs[file] = URL.createObjectURL(blob);
-                fileProgress[file] = blob.size || MP_FILE_SIZES[file];
-                updateTotalProgress();
+                downloadedSize += blob.size || MP_FILE_SIZES[file];
+                showGestureProgress(
+                    (downloadedSize / totalSize) * 100,
+                    '从缓存加载（秒开）',
+                    formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
+                );
                 console.log('[手势] 缓存命中:', file);
-                return;
+                continue;
             }
         }
 
-        // 3. 网络下载（带进度）
+        // 3. 网络下载（串行，进度平滑不跳变）
         console.log('[手势] 下载:', url);
         const response = await fetch(url);
         if (!response.ok) throw new Error('下载失败 ' + file + ': HTTP ' + response.status);
@@ -2771,8 +2764,17 @@ async function prefetchMediaPipeFiles(base) {
             const { done, value } = await reader.read();
             if (done) break;
             chunks.push(value);
-            fileProgress[file] += value.length;
-            updateTotalProgress();
+            downloadedSize += value.length;
+
+            const percent = (downloadedSize / totalSize) * 100;
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? (downloadedSize / elapsed) : 0;
+
+            showGestureProgress(
+                percent,
+                formatSpeed(speed),
+                formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
+            );
         }
 
         // 组装 Blob
@@ -2791,9 +2793,6 @@ async function prefetchMediaPipeFiles(base) {
         }
     }
 
-    // 并行下载所有文件（比串行快3-5倍）
-    await Promise.all(FILES.map(f => downloadFile(f)));
-
     showGestureProgress(100, '加载完成', '');
 }
 
@@ -2811,27 +2810,31 @@ async function initGestureRecognition() {
     showGestureProgress(0, '准备下载...', '0 / ' + formatSize(11000000));
 
     try {
-        // 国内CDN优先（npmmirror阿里云镜像国内最快），本地和海外CDN作为fallback
+        // 本地源优先预下载（同源无CORS问题，有进度条）
+        // CDN源不预下载（CORS可能不支持fetch流式读取），直接加载hands.js让MediaPipe内部加载
         const LOCAL_BASE = './mediapipe/';
         const SOURCES = [
-            { url: 'https://registry.npmmirror.com/@mediapipe/hands/0.4.1646424915/files/hands.js', base: 'https://registry.npmmirror.com/@mediapipe/hands/0.4.1646424915/files/', name: 'npmmirror国内' },
-            { url: 'https://npm.elemecdn.com/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://npm.elemecdn.com/@mediapipe/hands@0.4.1646424915/', name: 'elemecdn国内' },
-            { url: LOCAL_BASE + 'hands.js', base: LOCAL_BASE, name: '本地' },
-            { url: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/', name: 'jsdelivr' },
-            { url: 'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/', name: 'fastly' },
-            { url: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/', name: 'unpkg' },
+            { url: LOCAL_BASE + 'hands.js', base: LOCAL_BASE, name: '本地', canPrefetch: true },
+            { url: 'https://registry.npmmirror.com/@mediapipe/hands/0.4.1646424915/files/hands.js', base: 'https://registry.npmmirror.com/@mediapipe/hands/0.4.1646424915/files/', name: 'npmmirror国内', canPrefetch: false },
+            { url: 'https://npm.elemecdn.com/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://npm.elemecdn.com/@mediapipe/hands@0.4.1646424915/', name: 'elemecdn国内', canPrefetch: false },
+            { url: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/', name: 'jsdelivr', canPrefetch: false },
+            { url: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/hands.js', base: 'https://unpkg.com/@mediapipe/hands@0.4.1646424915/', name: 'unpkg', canPrefetch: false },
         ];
 
         let handsReady = false;
         for (const src of SOURCES) {
             try {
-                // 预下载模型文件（带进度显示），所有支持CORS的源都尝试预下载
-                // 如果预下载失败（CORS不支持），降级为MediaPipe内部加载（无进度条但能工作）
-                try {
+                // 只有本地源预下载（同源无CORS问题，有准确进度条）
+                // CDN源跳过预下载，让MediaPipe内部加载WASM（无进度条但更可靠）
+                if (src.canPrefetch) {
                     await prefetchMediaPipeFiles(src.base);
-                } catch (prefetchErr) {
-                    console.warn('[手势] 预下载失败，改用MediaPipe内部加载:', src.name, prefetchErr.message);
-                    showGestureProgress(50, '正在加载手势模型...', '进度不可用');
+                } else {
+                    // CDN源：检查是否已有本地预下载的blob可用
+                    const hasBlobs = Object.keys(mediaPipeBlobs).length > 0;
+                    if (!hasBlobs) {
+                        // 没有预下载blob，MediaPipe将内部加载，无法显示进度
+                        showGestureProgress(50, '正在从CDN加载手势模型...', '进度不可用');
+                    }
                 }
 
                 console.log('[手势] 尝试加载 hands.js:', src.name);
