@@ -2703,11 +2703,9 @@ function hideGestureLoading() {
     if (el) el.style.display = 'none';
 }
 
-// 预下载模型文件（串行下载，小文件优先，进度平滑），存入 Cache Storage + 内存 blob URL
+// 预下载模型文件（并行下载，带聚合进度），存入 Cache Storage + 内存 blob URL
 async function prefetchMediaPipeFiles(base) {
-    const allFiles = Object.keys(MP_FILE_SIZES);
-    // 小文件先下载（用户能快速看到进度变化）
-    const FILES = allFiles.sort((a, b) => MP_FILE_SIZES[a] - MP_FILE_SIZES[b]);
+    const FILES = Object.keys(MP_FILE_SIZES);
     let totalSize = 0;
     for (const f of FILES) totalSize += MP_FILE_SIZES[f];
 
@@ -2719,21 +2717,38 @@ async function prefetchMediaPipeFiles(base) {
         console.warn('[手势] Cache Storage 不可用:', e.message);
     }
 
-    let downloadedSize = 0;
     const startTime = Date.now();
+    // 每个文件的已下载字节数（用于聚合进度）
+    const fileProgress = {};
+    for (const f of FILES) fileProgress[f] = 0;
+    // 用于平滑进度的显示值（避免跳变）
+    let displayPercent = 0;
 
-    for (const file of FILES) {
+    // 平滑更新进度的定时器（独立于数据到达，每100ms更新一次，追赶实际进度）
+    const smoothTimer = setInterval(() => {
+        let downloaded = 0;
+        for (const f of FILES) downloaded += fileProgress[f];
+        const actualPercent = (downloaded / totalSize) * 100;
+        // 平滑追赶：每次追上实际进度的30%，不会跳变
+        displayPercent += (actualPercent - displayPercent) * 0.3;
+        if (displayPercent > actualPercent - 0.5) displayPercent = actualPercent; // 接近时直接对齐
+        const elapsed = (Date.now() - startTime) / 1000;
+        const speed = elapsed > 0 ? (downloaded / elapsed) : 0;
+        showGestureProgress(
+            displayPercent,
+            formatSpeed(speed),
+            formatSize(downloaded) + ' / ' + formatSize(totalSize)
+        );
+    }, 100);
+
+    // 单个文件的下载函数（带进度回调）
+    async function downloadFile(file) {
         const url = base + file;
 
         // 1. 先检查内存
         if (mediaPipeBlobs[file]) {
-            downloadedSize += MP_FILE_SIZES[file];
-            showGestureProgress(
-                (downloadedSize / totalSize) * 100,
-                '已加载',
-                formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
-            );
-            continue;
+            fileProgress[file] = MP_FILE_SIZES[file];
+            return;
         }
 
         // 2. 检查 Cache Storage
@@ -2742,18 +2757,13 @@ async function prefetchMediaPipeFiles(base) {
             if (cached) {
                 const blob = await cached.blob();
                 mediaPipeBlobs[file] = URL.createObjectURL(blob);
-                downloadedSize += blob.size || MP_FILE_SIZES[file];
-                showGestureProgress(
-                    (downloadedSize / totalSize) * 100,
-                    '从缓存加载（秒开）',
-                    formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
-                );
+                fileProgress[file] = blob.size || MP_FILE_SIZES[file];
                 console.log('[手势] 缓存命中:', file);
-                continue;
+                return;
             }
         }
 
-        // 3. 网络下载（串行，进度平滑不跳变）
+        // 3. 网络下载（带进度）
         console.log('[手势] 下载:', url);
         const response = await fetch(url);
         if (!response.ok) throw new Error('下载失败 ' + file + ': HTTP ' + response.status);
@@ -2765,17 +2775,7 @@ async function prefetchMediaPipeFiles(base) {
             const { done, value } = await reader.read();
             if (done) break;
             chunks.push(value);
-            downloadedSize += value.length;
-
-            const percent = (downloadedSize / totalSize) * 100;
-            const elapsed = (Date.now() - startTime) / 1000;
-            const speed = elapsed > 0 ? (downloadedSize / elapsed) : 0;
-
-            showGestureProgress(
-                percent,
-                formatSpeed(speed),
-                formatSize(downloadedSize) + ' / ' + formatSize(totalSize)
-            );
+            fileProgress[file] += value.length;
         }
 
         // 组装 Blob
@@ -2794,6 +2794,11 @@ async function prefetchMediaPipeFiles(base) {
         }
     }
 
+    // 并行下载所有文件（比串行快3-5倍）
+    await Promise.all(FILES.map(f => downloadFile(f)));
+
+    // 停止平滑定时器，确保显示100%
+    clearInterval(smoothTimer);
     showGestureProgress(100, '加载完成', '');
 }
 
