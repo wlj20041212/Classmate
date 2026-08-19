@@ -294,19 +294,24 @@ body{
   margin-top:22px;
 }
 .author-link{
-  border:1px solid var(--hair-strong);
-  background:transparent;
+  border:1.5px solid var(--cinnabar-soft);
+  background:color-mix(in oklch, var(--cinnabar) 6%, transparent);
   border-radius:999px;
   padding:8px 18px;
   font-family:var(--serif);
-  font-size:0.88rem;
-  color:var(--ink-soft);
+  font-size:0.9rem;
+  color:var(--cinnabar);
   cursor:pointer;
   text-decoration:none;
   letter-spacing:0.08em;
+  font-weight:600;
   transition:all .2s;
 }
-.author-link:hover{border-color:var(--cinnabar-soft);color:var(--cinnabar)}
+.author-link:hover{
+  border-color:var(--cinnabar);
+  background:var(--cinnabar);
+  color:color-mix(in oklch, var(--paper) 92%, white);
+}
 .author-link.active{
   background:var(--cinnabar);
   border-color:var(--cinnabar);
@@ -469,7 +474,7 @@ const AUTHORS = {
       {"title":"故夏","genre":"七绝","create":"2025-09-12","createLabel":"初稿2025年03月21日 · 定稿2025年09月12日","lines":["少儿持棍互逐藏，衣溅河泥嬉闹脏。","总角故人今又在，惟余蝉寂旧篱墙。"],"note":"","epigraph":""},
       {"title":"乙巳年立夏前游成都杂诗","genre":"古诗","create":"2025-05-01","createLabel":"2025年05月01日","lines":["轻衣初炎立夏头，辞陇入蜀越山丘。","密竹缠雨润青叶，灯夜江堰碎河风。","茅亭阶前新草旺，古柏武侯旧红墙。","锦里长街残路尽，短巷烟火香满楼。","残年若入西川路，恐少当年旧风流。","今朝春雨问海棠，昔年故院梨花香。"],"note":"宣德五年四月初四日作","epigraph":"同汉生、赵濡攸游作"},
       {"title":"无恨","genre":"古诗","create":"2024-11-19","createLabel":"2024年11月19日","lines":["常秋悽悽非今秋，今秋恰暖月不愁。","来时二载四季度，晴雨霜雪似梦中。","离恨终悔当时错，不若惜此未离别。","春满乱花未隐漫，勿教花落尽恨花。"],"note":"宣德四年十月十九日作","epigraph":"杂诗（其二）"},
-      {"title":"甲辰中秋游广元杂记","genre":"古诗","create":"2024-09-17","createLabel":"2024年09月17日","lines":["长月中秋嘉陵舟，巴山烟雨凤凰楼。","天堑剑阁阴平渡，三万兵马自破蜀。","舍身崖间梁山寺，千年唯余紫薇风。","若非相辞短日后，不负西南晚来秋。"],"note":"同汉生、赵濡攸、原游作","epigraph":""},
+      {"title":"甲辰中秋游广元杂记","genre":"古诗","create":"2024-09-17","createLabel":"2024年09月17日","lines":["长月中秋嘉陵舟，巴山烟雨凤凰楼。","天堑剑阁阴平渡，三万兵马自破蜀。","舍身崖间梁山寺，千年唯余紫薇风。","若非相辞短日后，不负西南晚来秋。"],"note":"同汉生、赵濡攸游作","epigraph":""},
       {"title":"无题","genre":"七绝","create":"2024-05-20","createLabel":"初稿2022年11月30日 · 定稿2024年05月20日","lines":["西风日暮赏秋意，执手轻言誓和鸣。","不寄忘川生世梦，惟怜湖榭月遥明。"],"note":"","epigraph":""},
       {"title":"仲夏","genre":"古诗","create":"2024-05-15","createLabel":"2024年05月15日","lines":["树影斑驳瘦南风，年华恰此散愁浓。","他时若念旧今梦，又逢一年是夏中。"],"note":"宣德四年四月初八","epigraph":""},
       {"title":"清明游忆曾年夏日（离思其七）","genre":"古诗","create":"2024-04-05","createLabel":"2024年04月05日","lines":["翠微映山桃花红，清雨蒙蒙梨花香。","家山寥景非此佳，此又独欠玉兰花。","故曲廉轻何所困？若逢旧景万情深。","曾年初夏衔落日，今余静淡沐春风。"],"note":"玉兰花：花语","epigraph":"同汉生、赵濡攸游作"},
