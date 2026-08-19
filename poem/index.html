@@ -284,6 +284,34 @@ body{
   font-style:italic;
   padding-left:1.2em;
   border-left:2px solid var(--hair-strong);
+  white-space:pre-line;
+}
+/* 作者切换栏 */
+.author-nav{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:22px;
+}
+.author-link{
+  border:1px solid var(--hair-strong);
+  background:transparent;
+  border-radius:999px;
+  padding:8px 18px;
+  font-family:var(--serif);
+  font-size:0.88rem;
+  color:var(--ink-soft);
+  cursor:pointer;
+  text-decoration:none;
+  letter-spacing:0.08em;
+  transition:all .2s;
+}
+.author-link:hover{border-color:var(--cinnabar-soft);color:var(--cinnabar)}
+.author-link.active{
+  background:var(--cinnabar);
+  border-color:var(--cinnabar);
+  color:color-mix(in oklch, var(--paper) 92%, white);
+  font-weight:600;
 }
 .poem-body{
   padding:8px 0 4px;
@@ -357,24 +385,25 @@ footer{
 </head>
 <body>
 
-<div class="bg-vertical">诗稿</div>
+<div class="bg-vertical" id="bgVertical">诗稿</div>
 
 <div class="page-wrap">
 
-  <button class="back-btn" type="button" aria-label="返回" onclick="window.location.href='../index.html'">←</button>
+  <button class="back-btn" type="button" aria-label="返回" id="backBtn">←</button>
 
   <header class="hero">
     <div>
-      <h1 class="hero-title">王乐江诗歌全集</h1>
-      <p class="hero-sub">王乐江，甘肃陇西人，字退安，2005年，甘肃省诗词学会会员，诗歌作品在中国诗歌网、中国词网、枫叶诗刊、千家诗词等平台均有投稿和展示。</p>
+      <h1 class="hero-title" id="heroTitle">王乐江诗歌全集</h1>
+      <p class="hero-sub" id="heroSub"></p>
       <div class="hero-stats">
         <div class="stat"><b id="stat-total">0</b><span>存诗总数</span></div>
         <div class="stat"><b id="stat-gu">0</b><span>古诗</span></div>
         <div class="stat"><b id="stat-lv">0</b><span>格律诗</span></div>
         <div class="stat"><b id="stat-ci">0</b><span>词</span></div>
       </div>
+      <nav class="author-nav" id="authorNav" aria-label="切换作者"></nav>
     </div>
-    <div class="seal" title="退安诗词"><span class="seal-text">退安<br>诗词</span></div>
+    <div class="seal" id="heroSeal" title="退安诗词"><span class="seal-text">退安<br>诗词</span></div>
   </header>
 
   <nav class="toolbar" aria-label="筛选工具栏">
@@ -411,38 +440,155 @@ footer{
   <main class="poem-list" id="poemList" aria-live="polite"></main>
 
   <footer>
-    <span>王乐江诗歌全集 · 共 <b id="footTotal">0</b> 首</span>
+    <span id="footLeft">王乐江诗歌全集 · 共 <b id="footTotal">0</b> 首</span>
     <span>宣德元年 · 2021</span>
   </footer>
 
 </div>
 
 <script>
-const POEMS = [{"title": "无题", "genre": "古诗", "create": "2026-06-11", "createLabel": "2026年06月11日", "publishLabel": "2026年06月11日21:15", "lines": ["春来雁知归，永逝莫能回。", "去者犹余念，山风入梦随。", "但悲泉路远，冷月照寒闺。", "千树花零落，空教稚子追。"], "note": "", "epigraph": "", "no": 1}, {"title": "无题", "genre": "七绝", "create": "2026-05-06", "createLabel": "2026年05月06日", "publishLabel": "2026年05月08日10:42", "lines": ["唯见晴光铺野开，爱随新燕过桥来。", "子规声懒斜阳暖，文杏浮香入露台。"], "note": "宣德六年三月二十日作", "epigraph": "赠子文，宣德六年三月二十日作", "no": 2}, {"title": "清明归乡", "genre": "七律", "create": "2026-04-07", "createLabel": "2026年04月07日", "publishLabel": "2026年04月08日12:56", "lines": ["门前桃树花如旧，陌上荒蹊草自青。", "屋畔新居春寂寂，杏阴老院月冥冥。", "风来似送书声近，蜂落唯怜香蕊轻。", "常记儿时深夜雨，一宵清冷到天明。"], "note": "", "epigraph": "宣德六年二月二十日作", "no": 3}, {"title": "悯农", "genre": "七律", "create": "2026-03-13", "createLabel": "2026年03月13日", "publishLabel": "2026年03月16日14:52", "lines": ["夏暑正田忙，躬身锄草荒。", "茫茫灼旱土，漠漠萎禾秧。", "万井祈稀雨，千畴换斗粮。", "风愁炎日尽，人却道天凉。"], "note": "", "epigraph": "", "no": 4}, {"title": "无题", "genre": "古诗", "create": "2026-03-06", "createLabel": "2026年03月06日", "publishLabel": "2026年03月09日15:00", "lines": ["资平万事苦，人易我独艰。", "奋飞何所望，自证明才堪。", "家贫今当立，此任子当担。", "岂效纨绔儿，纵己落平川。", "忍为庸碌郎，我自向天攀。", "万难我必历，勿教后人难。", "寸心难表意，不负少年冠。", "秋霜放肆笑，逢春花自开。"], "note": "", "epigraph": "古诗，2026年3.6日考研复习作", "no": 5}, {"title": "夜渡", "genre": "五绝", "create": "2026-03-04", "createLabel": "初稿2022年10月16日 · 定稿2026年03月04日", "publishLabel": "2026年03月05日15:13", "lines": ["尘月青烟渡，风笛透客愁。", "寻迁万州路，孤愿寄归舟。"], "note": "2022年10月16日高考复读之年作", "epigraph": "", "no": 6}, {"title": "放言", "genre": "七绝", "create": "2026-02-12", "createLabel": "2026年02月12日", "publishLabel": "2026年02月13日13:25", "lines": ["文腐才虚假上宾，沽名重利自难清。", "南枝老树寥无物，虫笑聚言花在听。"], "note": "宣德五年十二月廿五日作，新韵诗", "epigraph": "", "no": 7}, {"title": "秋", "genre": "七律", "create": "2025-09-25", "createLabel": "2025年09月25日", "publishLabel": "2025年09月25日15:39", "lines": ["秋烦小巷叶愁黄，风恶乱旋残日凉。", "昔鹊忙庭得见处，今丝闲院月离窗。", "伤花避泪垂翘首，悲草藏孤压厚霜。", "微雨暗城秋渐去，落白又蔽旧垣墙。"], "note": "宣德五年八月初四作", "epigraph": "", "no": 8}, {"title": "沈园感«钗头凤»", "genre": "七律", "create": "2025-09-12", "createLabel": "初稿2023年10月26日 · 定稿2025年09月12日", "publishLabel": "2025年09月12日01:39", "lines": ["秋苑梧桐辞旧叶，西风催雁觅新安。", "沈园负誓墙垣破，云梦寻盟鸾凤欢。", "散若三秋缘道尽，偏逢六载意犹寒。", "垂丝岸柳春还绿，旧处河池空怨残。"], "note": "", "epigraph": "", "no": 9}, {"title": "故夏", "genre": "七绝", "create": "2025-09-12", "createLabel": "初稿2025年03月21日 · 定稿2025年09月12日", "publishLabel": "2025年09月12日01:23", "lines": ["少儿持棍互逐藏，衣溅河泥嬉闹脏。", "总角故人今又在，惟余蝉寂旧篱墙。"], "note": "", "epigraph": "", "no": 10}, {"title": "乙巳年立夏前游成都杂诗", "genre": "古诗", "create": "2025-05-01", "createLabel": "2025年05月01日", "publishLabel": "2025年05月24日10:03", "lines": ["轻衣初炎立夏头，辞陇入蜀越山丘。", "密竹缠雨润青叶，灯夜江堰碎河风。", "茅亭阶前新草旺，古柏武侯旧红墙。", "锦里长街残路尽，短巷烟火香满楼。", "残年若入西川路，恐少当年旧风流。", "今朝春雨问海棠，昔年故院梨花香。"], "note": "宣德五年四月初四日作", "epigraph": "与王、赵同游诗", "no": 11}, {"title": "无恨", "genre": "古诗", "create": "2024-11-19", "createLabel": "2024年11月19日", "publishLabel": "2025年02月21日13:25", "lines": ["常秋悽悽非今秋，今秋恰暖月不愁。", "来时二载四季度，晴雨霜雪似梦中。", "离恨终悔当时错，不若惜此未离别。", "春满乱花未隐漫，勿教花落尽恨花。"], "note": "宣德四年十月十九日作", "epigraph": "杂诗（其二）", "no": 12}, {"title": "甲辰中秋游广元杂记", "genre": "古诗", "create": "2024-09-17", "createLabel": "2024年09月17日", "publishLabel": "2024年09月18日18:57", "lines": ["长月中秋嘉陵舟，巴山烟雨凤凰楼。", "天堑剑阁阴平渡，三万兵马自破蜀。", "舍身崖间梁山寺，千年唯余紫薇风。", "若非相辞短日后，不负西南晚来秋。"], "note": "嘉陵江 凤凰楼 舍身崖 梁山寺", "epigraph": "", "no": 13}, {"title": "无题", "genre": "七绝", "create": "2024-05-20", "createLabel": "初稿2022年11月30日 · 定稿2024年05月20日", "publishLabel": "2024年05月23日15:21", "lines": ["西风日暮赏秋意，执手轻言誓和鸣。", "不寄忘川生世梦，惟怜湖榭月遥明。"], "note": "", "epigraph": "", "no": 14}, {"title": "仲夏", "genre": "古诗", "create": "2024-05-15", "createLabel": "2024年05月15日", "publishLabel": "2024年05月16日15:03", "lines": ["树影斑驳瘦南风，年华恰此散愁浓。", "他时若念旧今梦，又逢一年是夏中。"], "note": "宣德四年四月初八", "epigraph": "", "no": 15}, {"title": "清明游忆曾年夏日（离思其七）", "genre": "古诗", "create": "2024-04-05", "createLabel": "2024年04月05日", "publishLabel": "2024年04月05日14:26", "lines": ["翠微映山桃花红，清雨蒙蒙梨花香。", "家山寥景非此佳，此又独欠玉兰花。", "故曲廉轻何所困？若逢旧景万情深。", "曾年初夏衔落日，今余静淡沐春风。"], "note": "玉兰花：花语", "epigraph": "同王、赵、原游作", "no": 16}, {"title": "离思（其六）", "genre": "古诗", "create": "2024-03-29", "createLabel": "2024年03月29日", "publishLabel": "2024年03月29日14:41", "lines": ["东风柔雨柳青青，暖春临江雁长鸣。", "桃李花开年年谢，过往逢景处处生。", "遗恨携季匆匆过，世人贪执多流连。", "浮生多是短途客，切莫回头空念旧。"], "note": "", "epigraph": "宣德四年二月廿十日作", "no": 17}, {"title": "夜来幽梦", "genre": "古诗", "create": "2024-02-26", "createLabel": "2024年02月26日", "publishLabel": "2024年02月27日22:21", "lines": ["情本君卿，伤苦唯己，痛心疾首道恨缘，", "故地重游不复见，悄然识旧物，唯有空悲悯。", "何求复见，怕难如故，海誓山盟今同在，", "飘雪执手非故人，寒夜望新月，只道早忘矣。"], "note": "", "epigraph": "宣德四年正月十七戌时作", "no": 18}, {"title": "新岁有感", "genre": "古诗", "create": "2024-02-10", "createLabel": "2024年02月10日", "publishLabel": "2024年02月16日12:01", "lines": ["甲辰临近往事清，旧缘自断新岁乐。", "行止休困皆因己，脱于此间唯道心。"], "note": "宣德四年元月一日作", "epigraph": "", "no": 19}, {"title": "种和落日有感", "genre": "古诗", "create": "2024-01-27", "createLabel": "2024年01月27日", "publishLabel": "2024年01月29日13:49", "lines": ["种和残阳落乾门，萧萧枝木送北风。", "济济客舍无为乐，小径幽清熬人心。", "晓夕星夜逢人度，日月尚分新旧年。", "昔年落暮同今似，今岁入新无故人。"], "note": "种和地名，宣德三年十二月十七日作", "epigraph": "", "no": 20}, {"title": "离思", "genre": "古诗", "create": "2024-01-02", "createLabel": "初稿2023年12月31日 · 定稿2024年01月02日", "publishLabel": "2024年01月02日12:29", "lines": ["自孽三载未有昭，但却善恶必时报。", "卦起不曾自明算，卦解唯有心惶惶。", "南花未散不曾惜，年尽残余终自悯。", "但愿五湖明月在，终须还了鸳鸯债。"], "note": "", "epigraph": "", "no": 21}, {"title": "无望", "genre": "古诗", "create": "2023-08-07", "createLabel": "2023年08月07日", "publishLabel": "2023年08月09日20:25", "lines": ["故曲复闻多几载，满伤再忆若如初。", "俗人无为难绚素，唯留余恨空自度。", "残叶秋湖倒璧月，只此相思遥寄君。", "无穷悲凉尽数受，隐隐浮沉落心中。"], "note": "宣德三年六月廿一日作", "epigraph": "", "no": 22}, {"title": "月菊有感", "genre": "古诗", "create": "2023-03-29", "createLabel": "2023年03月29日", "publishLabel": "2023年04月05日19:30", "lines": ["功名奉承世俗物，何处再寻旧少年。", "自若金印难授佩，不如菊酒月落前。"], "note": "宣德三年闰二月初八日作", "epigraph": "来时傥佩黄金印，莫见苏秦不下机", "no": 23}, {"title": "喜春", "genre": "古诗", "create": "2023-03-14", "createLabel": "2023年03月14日", "publishLabel": "2023年04月03日11:20", "lines": ["东风迟语早春晚，未防山桃迎时开。", "最怜微暮落山处，喜作闲诗度春安。"], "note": "宣德三年二月廿三日作", "epigraph": "", "no": 24}, {"title": "望月怀远", "genre": "古诗", "create": "2022-09-10", "createLabel": "2022年09月10日", "publishLabel": "2022年11月08日18:17", "lines": ["清月残杯琼瑶露，且醉怀思尽涕流。", "寂秋舟行惟勤聚，共语为幸抵万留。", "自作孤离远途客，似倾满月比寒惆。", "何得半时清闲梦，会与极乐解罹忧。"], "note": "宣德二年八月十五日作", "epigraph": "", "no": 25}, {"title": "自题", "genre": "古诗", "create": "2022-09-08", "createLabel": "2022年09月08日", "publishLabel": "2022年09月09日09:52", "lines": ["浮沉半卋难寻乐，缘信万物难信佛。", "奈何黄天空赋意，只叫相思寸苦辛。", "凄夜孤酌乱愁绪，倚首月色彼满倾。", "弥恨难解自泪涕，恐是明月知我心。"], "note": "", "epigraph": "", "no": 26}, {"title": "西桥阑墨", "genre": "古诗", "create": "2022-08-31", "createLabel": "2022年08月31日", "publishLabel": "2022年08月31日10:03", "lines": ["墨迹山川轻云净，诗雨江南赤子心。", "倚舟闲月乘情渡，凭栏望远俟君音。"], "note": "俟：等待", "epigraph": "", "no": 27}, {"title": "一剪梅·隐", "genre": "词", "create": "2022-08-31", "createLabel": "2022年08月31日", "publishLabel": "2022年08月31日10:06", "lines": ["轻拊柴扉绪如风，溪畔伏羽，茗留余香。", "闲看天色云舒卷，他年意气，浩渺若尘。", "穿木欲出撩风铃，原是心静，未觉风起。", "醉携佳人辩分野，云雾黛山，皓月星尘。"], "note": "非本人作品，赵作", "epigraph": "", "no": 28}, {"title": "离思（其四）", "genre": "古诗", "create": "2022-08-13", "createLabel": "2022年08月13日", "publishLabel": "2022年08月18日12:05", "lines": ["风露旭日烟云尽，微风拂柳映湖清。", "轻墨难语书生意，舟倚西桥醉琴音。", "若许良月星辰夜，定胜梧桐落叶时。", "尘风落雪三千去，只忆相思呈作君。"], "note": "离思其四", "epigraph": "", "no": 29}, {"title": "离思（其二）", "genre": "古诗", "create": "2022-05-29", "createLabel": "2022年05月29日", "publishLabel": "2022年06月02日16:02", "lines": ["斜暮垂日紫雲生，半城仲夏半城人。", "青林山涧岩枫嶂，江畔新柳影自摇。", "常悲逢世不得志，遗恨万古自不成。", "曾是清风孤对月，淡酌白露忆旧人。"], "note": "离思（其二）", "epigraph": "", "no": 30}, {"title": "离思", "genre": "古诗", "create": "2022-06-01", "createLabel": "2022年06月01日", "publishLabel": "2022年06月01日16:16", "lines": ["枯荆黄沙满孤城，烟月凝霜寒气生。", "风嘶长鸣惊天破，雨骤残阳似忘川。", "百战城破壮士尽，弥留归途倚马行。", "纵隔万里意常近，戎装赴远自寻君。"], "note": "", "epigraph": "", "no": 31}, {"title": "瑞雪有怀", "genre": "古诗", "create": "2021-12-15", "createLabel": "2021年12月", "publishLabel": "2022年05月02日17:08", "lines": ["冬月寒气近，秋叶入尘中。", "三年隙驹事，犹是昨日休。", "微颔忆昔日，孤身梦云春。", "落雪江北地，枯木道清幽。"], "note": "", "epigraph": "", "no": 32}, {"title": "离思", "genre": "古诗", "create": "2022-04-18", "createLabel": "2022年04月18日", "publishLabel": "2022年04月27日16:54", "lines": ["空山枯木得复青，欣红染莺犹有情。", "伴行蝉鸣清泉路，舟途碧池倒新影。", "梦悽宿起何穷尽，书诉风雨夜凄凄。", "日暮听取青鸾信，若寄相思归鸿音。"], "note": "", "epigraph": "", "no": 33}, {"title": "凝诀意", "genre": "古诗", "create": "2022-04-20", "createLabel": "2022年04月20日", "publishLabel": "2022年04月20日10:19", "lines": ["凛凛厉风湿长亭，日隐愁云役物凄。", "廊檐雨霁空阶明，纤云烟海障却影。", "不携尘染尽绝信，除余误兮皆作明？", "若知当年君真意，岂敢一语道西京。"], "note": "西京：长安", "epigraph": "", "no": 34}, {"title": "梦忆秋日幕霞", "genre": "古诗", "create": "2022-01-26", "createLabel": "2022年01月26日", "publishLabel": "2022年01月28日15:31", "lines": ["舟起广平岸，临至缥缈山。", "金波潾湖曳，暮近点树昏。", "鬓丝任风移，睥雁两相怿。", "伴云映落日，执手长恃依。"], "note": "怿：欢喜", "epigraph": "", "no": 35}];
+// ===== 三位作者数据 =====
+const AUTHORS = {
+  wlj: {
+    id: 'wlj',
+    name: '王乐江',
+    title: '王乐江诗歌全集',
+    sub: '王乐江，甘肃陇西人，字退安，2005年，甘肃省诗词学会会员，诗歌作品在中国诗歌网、中国词网、枫叶诗刊、千家诗词等平台均有投稿和展示。',
+    seal: '退安<br>诗词',
+    sealTitle: '退安诗词',
+    poems: [
+      {"title":"无题","genre":"古诗","create":"2026-06-11","createLabel":"2026年06月11日","lines":["春来雁知归，永逝莫能回。","去者犹余念，山风入梦随。","但悲泉路远，冷月照寒闺。","千树花零落，空教稚子追。"],"note":"","epigraph":""},
+      {"title":"无题","genre":"七绝","create":"2026-05-06","createLabel":"2026年05月06日","lines":["唯见晴光铺野开，爱随新燕过桥来。","子规声懒斜阳暖，文杏浮香入露台。"],"note":"宣德六年三月二十日作","epigraph":"赠子文，宣德六年三月二十日作"},
+      {"title":"清明归乡","genre":"七律","create":"2026-04-07","createLabel":"2026年04月07日","lines":["门前桃树花如旧，陌上荒蹊草自青。","屋畔新居春寂寂，杏阴老院月冥冥。","风来似送书声近，蜂落唯怜香蕊轻。","常记儿时深夜雨，一宵清冷到天明。"],"note":"","epigraph":"宣德六年二月二十日作"},
+      {"title":"悯农","genre":"五律","create":"2026-03-13","createLabel":"2026年03月13日","lines":["夏暑正田忙，躬身锄草荒。","茫茫灼旱土，漠漠萎禾秧。","万井祈稀雨，千畴换斗粮。","风愁炎日尽，人却道天凉。"],"note":"","epigraph":""},
+      {"title":"无题","genre":"古诗","create":"2026-03-06","createLabel":"2026年03月06日","lines":["资平万事苦，人易我独艰。","奋飞何所望，自证明才堪。","家贫今当立，此任子当担。","岂效纨绔儿，纵己落平川。","忍为庸碌郎，我自向天攀。","万难我必历，勿教后人难。","寸心难表意，不负少年冠。","秋霜放肆笑，逢春花自开。"],"note":"","epigraph":"古诗，2026年3.6日考研复习作"},
+      {"title":"夜渡","genre":"五绝","create":"2026-03-04","createLabel":"初稿2022年10月16日 · 定稿2026年03月04日","lines":["尘月青烟渡，风笛透客愁。","寻迁万州路，孤愿寄归舟。"],"note":"2022年10月16日高考复读之年作","epigraph":""},
+      {"title":"放言","genre":"七绝","create":"2026-02-12","createLabel":"2026年02月12日","lines":["文腐才虚假上宾，沽名重利自难清。","南枝老树寥无物，虫笑聚言花在听。"],"note":"宣德五年十二月廿五日作，新韵诗","epigraph":""},
+      {"title":"秋","genre":"七律","create":"2025-09-25","createLabel":"2025年09月25日","lines":["秋烦小巷叶愁黄，风恶乱旋残日凉。","昔鹊忙庭得见处，今丝闲院月离窗。","伤花避泪垂翘首，悲草藏孤压厚霜。","微雨暗城秋渐去，落白又蔽旧垣墙。"],"note":"宣德五年八月初四作","epigraph":""},
+      {"title":"沈园感«钗头凤»","genre":"七律","create":"2025-09-12","createLabel":"初稿2023年10月26日 · 定稿2025年09月12日","lines":["秋苑梧桐辞旧叶，西风催雁觅新安。","沈园负誓墙垣破，云梦寻盟鸾凤欢。","散若三秋缘道尽，偏逢六载意犹寒。","垂丝岸柳春还绿，旧处河池空怨残。"],"note":"","epigraph":""},
+      {"title":"故夏","genre":"七绝","create":"2025-09-12","createLabel":"初稿2025年03月21日 · 定稿2025年09月12日","lines":["少儿持棍互逐藏，衣溅河泥嬉闹脏。","总角故人今又在，惟余蝉寂旧篱墙。"],"note":"","epigraph":""},
+      {"title":"乙巳年立夏前游成都杂诗","genre":"古诗","create":"2025-05-01","createLabel":"2025年05月01日","lines":["轻衣初炎立夏头，辞陇入蜀越山丘。","密竹缠雨润青叶，灯夜江堰碎河风。","茅亭阶前新草旺，古柏武侯旧红墙。","锦里长街残路尽，短巷烟火香满楼。","残年若入西川路，恐少当年旧风流。","今朝春雨问海棠，昔年故院梨花香。"],"note":"宣德五年四月初四日作","epigraph":"同汉生、赵濡攸游作"},
+      {"title":"无恨","genre":"古诗","create":"2024-11-19","createLabel":"2024年11月19日","lines":["常秋悽悽非今秋，今秋恰暖月不愁。","来时二载四季度，晴雨霜雪似梦中。","离恨终悔当时错，不若惜此未离别。","春满乱花未隐漫，勿教花落尽恨花。"],"note":"宣德四年十月十九日作","epigraph":"杂诗（其二）"},
+      {"title":"甲辰中秋游广元杂记","genre":"古诗","create":"2024-09-17","createLabel":"2024年09月17日","lines":["长月中秋嘉陵舟，巴山烟雨凤凰楼。","天堑剑阁阴平渡，三万兵马自破蜀。","舍身崖间梁山寺，千年唯余紫薇风。","若非相辞短日后，不负西南晚来秋。"],"note":"同汉生、赵濡攸、原游作","epigraph":""},
+      {"title":"无题","genre":"七绝","create":"2024-05-20","createLabel":"初稿2022年11月30日 · 定稿2024年05月20日","lines":["西风日暮赏秋意，执手轻言誓和鸣。","不寄忘川生世梦，惟怜湖榭月遥明。"],"note":"","epigraph":""},
+      {"title":"仲夏","genre":"古诗","create":"2024-05-15","createLabel":"2024年05月15日","lines":["树影斑驳瘦南风，年华恰此散愁浓。","他时若念旧今梦，又逢一年是夏中。"],"note":"宣德四年四月初八","epigraph":""},
+      {"title":"清明游忆曾年夏日（离思其七）","genre":"古诗","create":"2024-04-05","createLabel":"2024年04月05日","lines":["翠微映山桃花红，清雨蒙蒙梨花香。","家山寥景非此佳，此又独欠玉兰花。","故曲廉轻何所困？若逢旧景万情深。","曾年初夏衔落日，今余静淡沐春风。"],"note":"玉兰花：花语","epigraph":"同汉生、赵濡攸游作"},
+      {"title":"离思（其六）","genre":"古诗","create":"2024-03-29","createLabel":"2024年03月29日","lines":["东风柔雨柳青青，暖春临江雁长鸣。","桃李花开年年谢，过往逢景处处生。","遗恨携季匆匆过，世人贪执多流连。","浮生多是短途客，切莫回头空念旧。"],"note":"","epigraph":"宣德四年二月廿十日作"},
+      {"title":"夜来幽梦","genre":"古诗","create":"2024-02-26","createLabel":"2024年02月26日","lines":["情本君卿，伤苦唯己，痛心疾首道恨缘，","故地重游不复见，悄然识旧物，唯有空悲悯。","何求复见，怕难如故，海誓山盟今同在，","飘雪执手非故人，寒夜望新月，只道早忘矣。"],"note":"","epigraph":"宣德四年正月十七戌时作"},
+      {"title":"新岁有感","genre":"古诗","create":"2024-02-10","createLabel":"2024年02月10日","lines":["甲辰临近往事清，旧缘自断新岁乐。","行止休困皆因己，脱于此间唯道心。"],"note":"宣德四年元月一日作","epigraph":""},
+      {"title":"种和落日有感","genre":"古诗","create":"2024-01-27","createLabel":"2024年01月27日","lines":["种和残阳落乾门，萧萧枝木送北风。","济济客舍无为乐，小径幽清熬人心。","晓夕星夜逢人度，日月尚分新旧年。","昔年落暮同今似，今岁入新无故人。"],"note":"种和地名，宣德三年十二月十七日作","epigraph":""},
+      {"title":"离思","genre":"古诗","create":"2024-01-02","createLabel":"初稿2023年12月31日 · 定稿2024年01月02日","lines":["自孽三载未有昭，但却善恶必时报。","卦起不曾自明算，卦解唯有心惶惶。","南花未散不曾惜，年尽残余终自悯。","但愿五湖明月在，终须还了鸳鸯债。"],"note":"","epigraph":""},
+      {"title":"无望","genre":"古诗","create":"2023-08-07","createLabel":"2023年08月07日","lines":["故曲复闻多几载，满伤再忆若如初。","俗人无难关绚素，唯留余恨空自度。","残叶秋湖倒璧月，只此相思遥寄君。","无穷悲凉尽数受，隐隐浮沉落心中。"],"note":"宣德三年六月廿一日作","epigraph":""},
+      {"title":"月菊有感","genre":"古诗","create":"2023-03-29","createLabel":"2023年03月29日","lines":["功名奉承世俗物，何处再寻旧少年。","自若金印难授佩，不如菊酒月落前。"],"note":"宣德三年闰二月初八日作","epigraph":"来时傥佩黄金印，莫见苏秦不下机"},
+      {"title":"喜春","genre":"古诗","create":"2023-03-14","createLabel":"2023年03月14日","lines":["东风迟语早春晚，未防山桃迎时开。","最怜微暮落山处，喜作闲诗度春安。"],"note":"宣德三年二月廿三日作","epigraph":""},
+      {"title":"望月怀远","genre":"古诗","create":"2022-09-10","createLabel":"2022年09月10日","lines":["清月残杯琼瑶露，且醉怀思尽涕流。","寂秋舟行惟勤聚，共语为幸抵万留。","自作孤离远途客，似倾满月比寒惆。","何得半时清闲梦，会与极乐解罹忧。"],"note":"宣德二年八月十五日作","epigraph":""},
+      {"title":"自题","genre":"古诗","create":"2022-09-08","createLabel":"2022年09月08日","lines":["浮沉半卋难寻乐，缘信万物难信佛。","奈何黄天空赋意，只叫相思寸苦辛。","凄夜孤酌乱愁绪，倚首月色彼满倾。","弥恨难解自泪涕，恐是明月知我心。"],"note":"","epigraph":""},
+      {"title":"西桥阑墨","genre":"古诗","create":"2022-08-31","createLabel":"2022年08月31日","lines":["墨迹山川轻云净，诗雨江南赤子心。","倚舟闲月乘情渡，凭栏望远俟君音。"],"note":"俟：等待；共创，和汉生","epigraph":""},
+      {"title":"离思（其四）","genre":"古诗","create":"2022-08-13","createLabel":"2022年08月13日","lines":["风露旭日烟云尽，微风拂柳映湖清。","轻墨难语书生意，舟倚西桥醉琴音。","若许良月星辰夜，定胜梧桐落叶时。","尘风落雪三千去，只忆相思呈作君。"],"note":"离思其四","epigraph":""},
+      {"title":"离思（其二）","genre":"古诗","create":"2022-05-29","createLabel":"2022年05月29日","lines":["斜暮垂日紫雲生，半城仲夏半城人。","青林山涧岩枫嶂，江畔新柳影自摇。","常悲逢世不得志，遗恨万古自不成。","曾是清风孤对月，淡酌白露忆旧人。"],"note":"离思（其二）","epigraph":""},
+      {"title":"离思","genre":"古诗","create":"2022-06-01","createLabel":"2022年06月01日","lines":["枯荆黄沙满孤城，烟月凝霜寒气生。","风嘶长鸣惊天破，雨骤残阳似忘川。","百战城破壮士尽，弥留归途倚马行。","纵隔万里意常近，戎装赴远自寻君。"],"note":"","epigraph":""},
+      {"title":"瑞雪有怀","genre":"古诗","create":"2021-12-15","createLabel":"2021年12月","lines":["冬月寒气近，秋叶入尘中。","三年隙驹事，犹是昨日休。","微颔忆昔日，孤身梦云春。","落雪江北地，枯木道清幽。"],"note":"","epigraph":""},
+      {"title":"离思","genre":"古诗","create":"2022-04-18","createLabel":"2022年04月18日","lines":["空山枯木得复青，欣红染莺犹有情。","伴行蝉鸣清泉路，舟途碧池倒新影。","梦悽宿起何穷尽，书诉风雨夜凄凄。","日暮听取青鸾信，若寄相思归鸿音。"],"note":"","epigraph":""},
+      {"title":"凝诀意","genre":"古诗","create":"2022-04-20","createLabel":"2022年04月20日","lines":["凛凛厉风湿长亭，日隐愁云役物凄。","廊檐雨霁空阶明，纤云烟海障却影。","不携尘染尽绝信，除余误兮皆作明？","若知当年君真意，岂敢一语道西京。"],"note":"西京：长安","epigraph":""},
+      {"title":"梦忆秋日幕霞","genre":"古诗","create":"2022-01-26","createLabel":"2022年01月26日","lines":["舟起广平岸，临至缥缈山。","金波潾湖曳，暮近点树昏。","鬓丝任风移，睥雁两相怿。","伴云映落日，执手长恃依。"],"note":"怿：欢喜","epigraph":""}
+    ]
+  },
+  ruz: {
+    id: 'ruz',
+    name: '赵濡攸',
+    title: '赵濡攸诗词集',
+    sub: '赵濡攸，甘肃陇西人，号濡攸散人，野生作家，业余诗人。',
+    seal: '濡攸<br>诗词',
+    sealTitle: '濡攸诗词',
+    poems: [
+      {"title":"行香子·念昔","genre":"词","create":"2022-03-01","createLabel":"2022年03月","lines":["轻拊柴扉，绪若溪澄。","忆昔年、意气清泠。","寸心未动，蓦惊风铃。","原是风起，穿林去，方始觉。","望云舒卷，闲卧溪亭。","栖禽处、半盏余茗。","醉携佳人，共辩虚盈。","黛山雾萦，星落庭，月疏影。"],"note":"","epigraph":"序：余早年学诸外乡，虽心性尚佳，略有天资。奈何人生长恨，际遇不佳。几度沉浮，顿觉苍凉。故成此文。"},
+      {"title":"采桑子·终离","genre":"词","create":"2022-03-02","createLabel":"2022年03月","lines":["初逢笑靥春风里，少年意气，沧海难为。","胫畔银铃伊系，风也温柔，雨也温柔。","往日欢笑今成空。","人世歧路，此恨谁同？","烛残未觉人已去，但听风吟，且闻雨落。"],"note":"","epigraph":"自评曰：碧玉破瓜后，年将弱冠时\n           斯人辞我去，才知终离意。"},
+      {"title":"霜天晓角·过剑阁","genre":"词","create":"2024-09-17","createLabel":"2024年09月17日","lines":["雾起山檐。须臾古今事。","了了三秦巴蜀，苍烟落、照关山。","莫悲。前尘故。月晦星尚明。","惟有今人思古，昔年郎，归何处？"],"note":"","epigraph":"同汉生、退安游作"}
+    ]
+  },
+  hs: {
+    id: 'hs',
+    name: '王汉升',
+    title: '汉生诗词集',
+    sub: '王汉升，甘肃陇西人，号汉升游人，业余诗人。',
+    seal: '汉生<br>诗词',
+    sealTitle: '汉生诗词',
+    poems: [
+      {"title":"西桥阑墨","genre":"古诗","create":"2022-08-31","createLabel":"2022年08月31日","lines":["墨迹山川轻云净，诗雨江南赤子心。","倚舟闲月乘情渡，凭栏望远俟君音。"],"note":"俟：等待；共创，和王乐江","epigraph":""},
+      {"title":"一剪梅·隐","genre":"词","create":"2022-08-31","createLabel":"2022年08月31日","lines":["轻拊柴扉绪如风，溪畔伏羽，茗留余香。","闲看天色云舒卷，他年意气，浩渺若尘。","穿木欲出撩风铃，原是心静，未觉风起。","醉携佳人辩分野，云雾黛山，皓月星尘。"],"note":"","epigraph":""}
+    ]
+  }
+};
+
+const ORDER = ['wlj','ruz','hs'];
+
+// ===== DOM 引用 =====
 const listEl = document.getElementById('poemList');
 const searchEl = document.getElementById('searchInput');
 const sortBtn = document.getElementById('sortBtn');
 const resultCount = document.getElementById('resultCount');
-
-let state = { q:'', genre:'all', year:'all', asc:true };
-
-// 统计
 const statTotal = document.getElementById('stat-total');
 const statGu = document.getElementById('stat-gu');
 const statLv = document.getElementById('stat-lv');
 const statCi = document.getElementById('stat-ci');
-const footTotal = document.getElementById('footTotal');
-statTotal.textContent = POEMS.length;
-footTotal.textContent = POEMS.length;
-statGu.textContent = POEMS.filter(p=>p.genre==='古诗').length;
-statLv.textContent = POEMS.filter(p=>['七绝','五绝','七律','五律'].includes(p.genre)).length;
-statCi.textContent = POEMS.filter(p=>p.genre==='词').length;
+const heroTitle = document.getElementById('heroTitle');
+const heroSub = document.getElementById('heroSub');
+const heroSeal = document.getElementById('heroSeal');
+const bgVertical = document.getElementById('bgVertical');
+const authorNav = document.getElementById('authorNav');
+const backBtn = document.getElementById('backBtn');
+const footLeft = document.getElementById('footLeft');
+
+let state = { q:'', genre:'all', year:'all', asc:true };
+let POEMS = [];
+
+function getCurrentAuthor(){
+  const m = location.hash.match(/a=([a-z]+)/);
+  const id = m ? m[1] : 'wlj';
+  return AUTHORS[id] || AUTHORS.wlj;
+}
 
 function esc(s){
   return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function genreClass(g){ return ['七绝','五绝','七律','五律'].includes(g) ? 'lv' : ''; }
+
+function applyAuthor(){
+  const a = getCurrentAuthor();
+  document.title = a.title;
+  heroTitle.textContent = a.title;
+  heroSub.textContent = a.sub;
+  heroSeal.title = a.sealTitle;
+  heroSeal.querySelector('.seal-text').innerHTML = a.seal;
+  bgVertical.textContent = a.name + '诗稿';
+  footLeft.innerHTML = a.title + ' · 共 <b id="footTotal">0</b> 首';
+
+  // 作者切换按钮：显示另外两位
+  authorNav.innerHTML = ORDER.filter(id=>id!==a.id).map(id=>{
+    const o = AUTHORS[id];
+    return '<a class="author-link" href="#a='+id+'" data-id="'+id+'">'+o.name+'诗词</a>';
+  }).join('');
+
+  // 重置筛选与搜索
+  state = { q:'', genre:'all', year:'all', asc:true };
+  searchEl.value = '';
+  sortBtn.textContent = '时间 ↑';
+  document.querySelectorAll('#genreChips .chip').forEach(c=>c.classList.toggle('active', c.dataset.genre==='all'));
+  document.querySelectorAll('#yearChips .chip').forEach(c=>c.classList.toggle('active', c.dataset.year==='all'));
+
+  POEMS = a.poems.map((p,i)=>Object.assign({no:i+1}, p));
+
+  // 统计
+  const footTotal = document.getElementById('footTotal');
+  statTotal.textContent = POEMS.length;
+  footTotal.textContent = POEMS.length;
+  statGu.textContent = POEMS.filter(p=>p.genre==='古诗').length;
+  statLv.textContent = POEMS.filter(p=>['七绝','五绝','七律','五律'].includes(p.genre)).length;
+  statCi.textContent = POEMS.filter(p=>p.genre==='词').length;
+
+  render();
+}
 
 function render(){
   let q = state.q.trim().toLowerCase();
@@ -510,7 +656,27 @@ sortBtn.addEventListener('click', ()=>{
   render();
 });
 
-render();
+// 作者切换：pushState 让 history.back() 能逐层返回
+authorNav.addEventListener('click', e=>{
+  const link = e.target.closest('.author-link'); if(!link) return;
+  e.preventDefault();
+  const id = link.dataset.id;
+  if(!AUTHORS[id]) return;
+  history.pushState({a:id}, '', '#a='+id);
+  applyAuthor();
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+window.addEventListener('popstate', applyAuthor);
+
+// 返回按钮：逐层返回，无历史则回首页
+backBtn.addEventListener('click', ()=>{
+  if(history.length > 1) history.back();
+  else location.href = '../index.html';
+});
+
+// 初始化
+applyAuthor();
 </script>
 </body>
 </html>
