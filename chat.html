@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f5f0e6">
 <meta name="description" content="飞鸽传书 · 古风信笺 · 一只鸽子替你捎话">
+<meta http-equiv="Cache-Control" content="no-store">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>飞鸽传书 · 古风信笺</title>
 <!--
   ============================================================
@@ -972,6 +975,8 @@ const state = {
   animals: {},         // 动物库存 {id:count}
   currentAnimal: 'dove', // 当前选中信使
   names: {},            // 自定义名号 {id:name}
+  expandedInbox: new Set(), // 收件箱展开的信件ID（防轮询刷新收起）
+  expandedSent: new Set(),  // 发件箱展开的信件ID
   renameTarget: null,
   boxNames: {},         // 信箱名号缓存 {box:name}
 };
@@ -1107,7 +1112,10 @@ dom.btnResetConfirm.addEventListener('click', async () => {
   localStorage.setItem('pigeon_box', newBox);
   state.box = newBox; dom.boxNo.textContent = newBox;
   state.messages = []; state.sent = []; state.knownIds.clear();
+  state.expandedInbox.clear(); state.expandedSent.clear();
   renderInbox(); renderSent(); destroyAllMaps();
+  // 立即拉取新信箱数据（含迁移过来的飞行中信件）
+  fetchInbox(); fetchSent();
   toast('已重置，飞行中信件已迁移到新信箱', true);
 });
 
@@ -1233,6 +1241,8 @@ function playLaunchAnimation(animalId){
 
 /* ---------- GPS ---------- */
 let lastGPS = null;
+// 从 localStorage 恢复定位（刷新不丢）
+try { const saved = localStorage.getItem('pigeon_gps'); if (saved) lastGPS = JSON.parse(saved); } catch(e) {}
 let gpsSendHinted = false;  // 发信时是否已提示过（点"我已知晓"后不再提示）
 
 function requestGPS() {
@@ -1240,6 +1250,8 @@ function requestGPS() {
     if (!navigator.geolocation) return resolve(null);
     const done = (pos) => {
       lastGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      // 持久化到 localStorage，刷新不丢
+      try { localStorage.setItem('pigeon_gps', JSON.stringify(lastGPS)); } catch(e) {}
       dom.gpsNote.classList.add('on');
       dom.gpsNoteText.textContent = '已记录发信坐标，信鸽飞行有迹可循';
       dom.btnGPS.classList.add('on');
@@ -1249,6 +1261,7 @@ function requestGPS() {
     };
     const fail = () => {
       lastGPS = null;
+      try { localStorage.removeItem('pigeon_gps'); } catch(e) {}
       dom.gpsNote.classList.remove('on');
       dom.btnGPS.classList.remove('on');
       dom.btnGPS.textContent = '获取定位';
@@ -1266,8 +1279,17 @@ function initGPS() {
     dom.gpsBanner.classList.add('hide');
     return;
   }
-  // 横幅已默认显示，等用户点「允许定位」
-  dom.gpsNoteText.textContent = '点顶部「允许定位」开启，信鸽飞行有迹可循';
+  // 从 localStorage 恢复了定位，直接更新 UI
+  if (lastGPS) {
+    dom.gpsNote.classList.add('on');
+    dom.gpsNoteText.textContent = '已记录发信坐标，信鸽飞行有迹可循';
+    dom.btnGPS.classList.add('on');
+    dom.btnGPS.textContent = '定位已开';
+    dom.gpsBanner.classList.add('hide');
+  } else {
+    // 横幅已默认显示，等用户点「允许定位」
+    dom.gpsNoteText.textContent = '点顶部「允许定位」开启，信鸽飞行有迹可循';
+  }
 }
 
 // 横幅「允许定位」按钮（用户手势触发，手机会弹权限框）
@@ -1592,8 +1614,10 @@ function renderMiniMap(el, a, b, deliverAt, animalId) {
   const svg = animalId ? animalSvg(animalId) : PIGEON_SVG;
   const icon = L.divIcon({ className: '', html: `<div class="pigeon-ico">${svg}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] });
   L.marker(a, { icon, interactive: false }).addTo(map);
-  // 展开后容器尺寸才正确，需刷新（延时确保 display:block 生效）
+  // 展开后容器尺寸才正确，需多次刷新确保 display:block 生效
   setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 50);
+  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 200);
+  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 500);
 }
 
 /* ============================================================
@@ -1639,6 +1663,13 @@ function renderInbox() {
   const list = state.messages;
 
   dom.inboxEmpty.classList.toggle('show', list.length === 0);
+  // 先记录当前展开的信件（重建前）
+  dom.inboxList.querySelectorAll('.msg-detail-expand').forEach((d) => {
+    if (d.style.display !== 'none') {
+      const item = d.closest('.msg-item');
+      if (item && item.dataset.id) state.expandedInbox.add(item.dataset.id);
+    }
+  });
   dom.inboxList.innerHTML = '';
 
   // 清理已消失的飞行地图
@@ -1655,6 +1686,9 @@ function renderInbox() {
   }).forEach((m) => {
     dom.inboxList.appendChild(buildInboxItem(m));
   });
+  // 清理已不存在的展开记录
+  const curIds = new Set(list.map((m) => m.id));
+  state.expandedInbox.forEach((id) => { if (!curIds.has(id)) state.expandedInbox.delete(id); });
 }
 function buildInboxItem(m) {
   const item = document.createElement('div');
@@ -1688,7 +1722,8 @@ function buildInboxItem(m) {
   // 详情展开区（点击头部展开/收起）
   const detail = document.createElement('div');
   detail.className = 'msg-detail-expand';
-  detail.style.cssText = 'display:none;padding:8px 12px';
+  const wasExpanded = state.expandedInbox.has(m.id);
+  detail.style.cssText = (wasExpanded ? 'display:block' : 'display:none') + ';padding:8px 12px';
 
   // 视觉框：flying=地图 / dead=殒命图 / delivered=read=信纸 / recalled=召回提示
   if (m.status === 'flying') {
@@ -1725,6 +1760,12 @@ function buildInboxItem(m) {
       // 无发件方或收件方定位：以飞鸟动画替代地图
       detail.insertAdjacentHTML('beforeend', flyAnimHtml(m.animal, '信使途中，山河迢递'));
     }
+    // 飞行中信件内容提示：信已封缄，送达后方可展阅
+    const sealHint = document.createElement('div');
+    sealHint.className = 'msg-seal-hint';
+    sealHint.style.cssText = 'margin:10px 0 2px;padding:12px 14px;text-align:center;background:var(--paper-deep);border-radius:8px;border:1px dashed var(--paper-line);font-size:13px;color:var(--ink-soft);line-height:1.7';
+    sealHint.innerHTML = '✉ 信已封缄，待信使送达后方可展阅<br><span style="font-size:11px;color:var(--ink-faint)">（届时点开此信即可阅读全文）</span>';
+    detail.appendChild(sealHint);
   }
   if (m.status === 'dead') {
     const ani = ANIMALS[m.animal] || ANIMALS.dove;
@@ -1774,7 +1815,10 @@ function buildInboxItem(m) {
   head.addEventListener('click', () => {
     const isOpen = detail.style.display !== 'none';
     detail.style.display = isOpen ? 'none' : 'block';
-    if (!isOpen) {
+    if (isOpen) {
+      state.expandedInbox.delete(m.id);
+    } else {
+      state.expandedInbox.add(m.id);
       // 展开时懒渲染地图
       if (detail._renderMap) detail._renderMap();
       // 已送达 → 标记已读
@@ -1808,6 +1852,8 @@ function buildInboxItem(m) {
       }
     }
   });
+  // 若之前是展开状态，恢复时懒渲染地图
+  if (wasExpanded && detail._renderMap) detail._renderMap();
   return item;
 }
 function statusText(s) {
@@ -1878,6 +1924,13 @@ async function fetchSent() {
 function renderSent() {
   const list = state.sent;
   dom.sentEmpty.classList.toggle('show', list.length === 0);
+  // 先记录当前展开的信件（重建前）
+  dom.sentList.querySelectorAll('.sent-detail').forEach((d) => {
+    if (d.style.display !== 'none') {
+      const item = d.closest('.msg-item');
+      if (item && item.dataset.id) state.expandedSent.add(item.dataset.id);
+    }
+  });
   dom.sentList.innerHTML = '';
   list.slice().sort((x, y) => {
     // 置顶在前
@@ -1890,6 +1943,7 @@ function renderSent() {
     item.dataset.id = m.id;
     const st = m.status || 'flying';
     const done = st === 'delivered' || st === 'read';
+    const wasExpanded = state.expandedSent.has(m.id);
     const inner = document.createElement('div');
     inner.className = 'sent-item';
     inner.style.cursor = 'pointer';
@@ -1905,7 +1959,7 @@ function renderSent() {
     // 详情展开区（点击信件头部展开/收起）
     const detail = document.createElement('div');
     detail.className = 'sent-detail';
-    detail.style.cssText = 'display:none;padding:8px 12px';
+    detail.style.cssText = (wasExpanded ? 'display:block' : 'display:none') + ';padding:8px 12px';
 
     // 飞行中：倒计时 + 地图（懒渲染）+ 召回按钮
     if (st === 'flying') {
@@ -1935,7 +1989,7 @@ function renderSent() {
           if (mapWrap.dataset.rendered) return;
           mapWrap.dataset.rendered = '1';
           if (window.L) renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null);
-          else loadLeaflet().then(() => renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null)).catch(() => {});
+          else loadLeaflet().then(() => renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null)).catch(() => { mapWrap.innerHTML = flyAnimHtml(m.animal, '信使途中，山河迢递'); });
         };
       } else {
         // 无发件方或收件方定位：以飞鸟动画替代地图
@@ -2016,10 +2070,20 @@ function renderSent() {
     inner.addEventListener('click', () => {
       const isOpen = detail.style.display !== 'none';
       detail.style.display = isOpen ? 'none' : 'block';
-      if (!isOpen && detail._renderMap) detail._renderMap();
+      if (isOpen) {
+        state.expandedSent.delete(m.id);
+      } else {
+        state.expandedSent.add(m.id);
+        if (detail._renderMap) detail._renderMap();
+      }
     });
+    // 若之前是展开状态，恢复时懒渲染地图
+    if (wasExpanded && detail._renderMap) detail._renderMap();
     dom.sentList.appendChild(item);
   });
+  // 清理已不存在的展开记录
+  const curIds = new Set(list.map((m) => m.id));
+  state.expandedSent.forEach((id) => { if (!curIds.has(id)) state.expandedSent.delete(id); });
 }
 
 /* 我发的信：删除（仅自己页面） */

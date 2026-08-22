@@ -153,7 +153,7 @@ export default {
 async function handleSend(request, env) {
   try {
     const body = await request.json();
-    const { to, content, flyHours, fromGPS, animal, petName, willDie, deathReason } = body;
+    const { to, content, flyHours, fromGPS, animal, petName, willDie, deathReason, deathIcon } = body;
     const from = body.from || '';
 
     if (!to || !/^[A-HJ-NP-Z2-9]{6}$/.test(to)) return json({ error: '收件人信箱号无效' }, 400);
@@ -175,6 +175,7 @@ async function handleSend(request, env) {
       petName: petName || '',    // 信使名号
       willDie: !!willDie,        // 是否会死
       deathReason: deathReason || '', // 死因
+      deathIcon: deathIcon || '',    // 殒命场景图标
       flyHours: hours,
       deliverAt,                 // 送达时间戳
       createdAt: now,            // 发送时间
@@ -529,7 +530,15 @@ async function handleMigrate(request, env) {
     let migrated = 0;
 
     // 用 get 读取旧信箱索引（替代 list）
-    const inboxIds = await getIndex(env, `idx:inbox:${oldBox}`);
+    let inboxIds = await getIndex(env, `idx:inbox:${oldBox}`);
+    // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
+    if (inboxIds.length === 0) {
+      const oldList = await env.MESSAGES.list({ prefix: `inbox:${oldBox}:` });
+      if (oldList.keys.length > 0) {
+        inboxIds = oldList.keys.map((k) => k.name.split(':')[2]);
+        await setIndex(env, `idx:inbox:${oldBox}`, inboxIds);
+      }
+    }
     for (const id of inboxIds) {
       const raw = await env.MESSAGES.get(`msg:${id}`);
       if (!raw) continue;
@@ -545,7 +554,15 @@ async function handleMigrate(request, env) {
     }
 
     // 用 get 读取旧发件箱索引（替代 list）
-    const sentIds = await getIndex(env, `idx:sent:${oldBox}`);
+    let sentIds = await getIndex(env, `idx:sent:${oldBox}`);
+    // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
+    if (sentIds.length === 0) {
+      const oldList = await env.MESSAGES.list({ prefix: `sent:${oldBox}:` });
+      if (oldList.keys.length > 0) {
+        sentIds = oldList.keys.map((k) => k.name.split(':')[2]);
+        await setIndex(env, `idx:sent:${oldBox}`, sentIds);
+      }
+    }
     for (const id of sentIds) {
       const raw = await env.MESSAGES.get(`msg:${id}`);
       if (!raw) continue;
@@ -556,6 +573,7 @@ async function handleMigrate(request, env) {
         // 更新索引
         await indexRemove(env, `idx:sent:${oldBox}`, id);
         await indexPush(env, `idx:sent:${newBox}`, id);
+        migrated++;
       }
     }
     return json({ ok: true, migrated });
