@@ -432,6 +432,7 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 }
 .animal-card .rarity.epic{background:rgba(168,138,62,.18);color:#a88a3e}
 .animal-card .rarity.legend{background:rgba(192,57,43,.16);color:var(--cinnabar)}
+.animal-card .rarity.rare{background:rgba(59,130,246,.16);color:#3b82f6}
 .animal-card .ani-svg{width:64px;height:64px;margin:4px auto 6px;display:block}
 .animal-card .ani-name{font-family:var(--kai);font-size:17px;letter-spacing:.1em;text-align:center;color:var(--ink)}
 .animal-card .ani-pet{font-size:11px;color:var(--ink-faint);text-align:center;margin-top:2px;letter-spacing:.04em}
@@ -510,6 +511,10 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 }
 .ani-svg .bird-body{animation:bodyBob 1.6s ease-in-out infinite}
 @keyframes bodyBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+.halo{animation:haloPulse 2s ease-in-out infinite}
+@keyframes haloPulse{0%,100%{opacity:.3;stroke-width:.8}50%{opacity:.7;stroke-width:1.5}}
+.halo-dot{animation:dotFloat 2.4s ease-in-out infinite}
+@keyframes dotFloat{0%,100%{opacity:.4}50%{opacity:.9}}
 
 /* 信使选择栏（写信页横向滑动） */
 .messenger-bar{
@@ -595,8 +600,9 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
     <h2 class="form-title">修书一封</h2>
     <div class="field">
       <label class="field-label" for="toBox"><b>*</b>收件人信箱号</label>
-      <div class="input-box">
-        <input id="toBox" type="text" maxlength="6" placeholder="六位信箱号" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <div class="input-box" style="display:flex;gap:8px">
+        <input id="toBox" type="text" maxlength="6" placeholder="六位信箱号" autocomplete="off" autocapitalize="characters" spellcheck="false" style="flex:1">
+        <button type="button" class="btn-redeem" id="btnPasteBox" style="flex:0 0 auto;padding:10px 14px;font-size:12px;letter-spacing:.1em">粘贴</button>
       </div>
     </div>
     <div class="field">
@@ -675,7 +681,8 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
       <span class="refresh" style="font-size:12px;color:var(--ink-faint)">不同信使，生死有命</span>
     </div>
     <p style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin:4px 0 8px;letter-spacing:.04em">
-      信使越珍稀，越能穿越山河而不陨。看一段景物七息可得新使，或持兑换码换神鸟青鸟。
+      <b style="color:var(--ink-soft)">普通</b>·常有陨落 ／ <b style="color:#a88a3e">史诗</b>·罕有陨落 ／ <b style="color:var(--cinnabar)">传说</b>·永陨不坠<br>
+      <span style="color:var(--ink-faint);font-size:12px">珍稀信使速度更快、殒命更少。观景七息可得新使，或持兑换码换之。</span>
     </p>
     <div class="animal-grid" id="animalGrid"></div>
     <div class="animal-actions">
@@ -795,6 +802,7 @@ const dom = {
   btnRedeemCancel: $('btnRedeemCancel'), btnRedeemConfirm: $('btnRedeemConfirm'),
   renameModal: $('renameModal'), renameInput: $('renameInput'), renameHint: $('renameHint'),
   btnRenameRandom: $('btnRenameRandom'), btnRenameConfirm: $('btnRenameConfirm'),
+  btnPasteBox: $('btnPasteBox'),
   messengerBar: null,
 };
 
@@ -972,8 +980,11 @@ async function sendMessage() {
   // 死亡判定：按动物死亡率，飞行时长越长风险略增
   const flyHours = getFlyHours();
   const baseDeath = animal.death;
-  const lengthRisk = Math.min(flyHours / 168, 1) * 0.06; // 7日最多+6%
-  const willDie = Math.random() < (baseDeath + lengthRisk);
+  const lengthRisk = Math.min(flyHours / 168, 1) * 0.08; // 7日最多+8%
+  const deathRoll = Math.random();
+  const willDie = deathRoll < (baseDeath + lengthRisk);
+  // 殒命原因（随机事件）
+  const deathReason = willDie ? pickDeathEvent() : '';
 
   dom.btnSend.disabled = true;
   dom.btnSend.textContent = '正召' + animal.name + '…';
@@ -982,7 +993,7 @@ async function sendMessage() {
     const res = await fetch(`${API_BASE}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, content, flyHours, fromGPS, animal: animal.id, petName, willDie })
+      body: JSON.stringify({ to, content, flyHours, fromGPS, animal: animal.id, petName, willDie, deathReason })
     });
     if (!res.ok) throw new Error(res.status);
     const data = await res.json().catch(() => ({}));
@@ -995,7 +1006,7 @@ async function sendMessage() {
     if (willDie) {
       // 消耗一只信使（阵亡）
       consumeAnimal(animal.id);
-      setTimeout(() => toast(animal.name + '「' + petName + '」前途凶险…', true), 1400);
+      setTimeout(() => toast(animal.name + '「' + (petName || '无名') + '」前途凶险…', true), 1400);
     } else {
       consumeAnimal(animal.id);
     }
@@ -1298,7 +1309,7 @@ function buildInboxItem(m) {
     const ani = ANIMALS[m.animal] || ANIMALS.dove;
     const body = document.createElement('div');
     body.className = 'msg-body';
-    body.innerHTML = `<div class="dead-note">信使「${esc(ani.name)}${m.petName ? '·' + esc(m.petName) : ''}」中途殒命，书信散落山河，未能送达。</div>`;
+    body.innerHTML = `<div class="dead-note">信使「${esc(ani.name)}${m.petName ? '·' + esc(m.petName) : ''}」中途殒命，${esc(m.deathReason || '书信散落山河，未能送达')}。</div>`;
     item.appendChild(body);
   }
   // 点击：已送达/已读 → 展开 + 标记已读
@@ -1443,7 +1454,7 @@ function renderSent() {
       const note = document.createElement('div');
       note.className = 'dead-note';
       const ani = ANIMALS[m.animal] || ANIMALS.dove;
-      note.innerHTML = '信使「' + esc(ani.name) + (m.petName ? '·' + esc(m.petName) : '') + '」中途殒命，书信散落山河。';
+      note.innerHTML = '信使「' + esc(ani.name) + (m.petName ? '·' + esc(m.petName) : '') + '」中途殒命，' + esc(m.deathReason || '书信散落山河') + '。';
       item.appendChild(note);
     }
     dom.sentList.appendChild(item);
@@ -1567,15 +1578,30 @@ document.addEventListener('DOMContentLoaded', () => {
    信使 · 动物系统
    ============================================================ */
 const ANIMALS = {
-  dove:   { id:'dove',   name:'灰鸽', rarity:'普通', speed:1.0, death:0.14, desc:'朴实可靠', body:'#9ca3af', wing:'#6b7280', type:'normal' },
-  swallow:{ id:'swallow',name:'燕子', rarity:'普通', speed:1.2, death:0.18, desc:'疾速脆弱', body:'#4b5563', wing:'#1f2937', type:'swallow' },
-  white:  { id:'white',  name:'白鸽', rarity:'史诗', speed:1.3, death:0.06, desc:'纯洁守信', body:'#f3f4f6', wing:'#d1d5db', type:'normal' },
-  goose:  { id:'goose',  name:'鸿雁', rarity:'史诗', speed:1.4, death:0.05, desc:'稳健远行', body:'#a16207', wing:'#78350f', type:'goose' },
-  eagle:  { id:'eagle',  name:'苍鹰', rarity:'传说', speed:1.7, death:0.03, desc:'疾速凶猛', body:'#92400e', wing:'#451a03', type:'eagle' },
-  blue:   { id:'blue',   name:'青鸟', rarity:'传说', speed:1.5, death:0.00, desc:'神鸟不陨', body:'#0891b2', wing:'#0e7490', type:'normal' }
+  dove:   { id:'dove',   name:'灰鸽', rarity:'普通', speed:1.0, death:0.22, desc:'朴实而常殒于途', body:'#9ca3af', wing:'#6b7280', type:'normal' },
+  swallow:{ id:'swallow',name:'燕子', rarity:'普通', speed:1.3, death:0.28, desc:'疾飞而命薄', body:'#4b5563', wing:'#1f2937', type:'swallow' },
+  eagle:  { id:'eagle',  name:'苍鹰', rarity:'稀有', speed:1.6, death:0.12, desc:'猛捷而招祸', body:'#92400e', wing:'#451a03', type:'eagle' },
+  white:  { id:'white',  name:'白鸽', rarity:'史诗', speed:1.5, death:0.06, desc:'纯善守信，罕有陨落', body:'#f3f4f6', wing:'#d1d5db', type:'normal' },
+  goose:  { id:'goose',  name:'鸿雁', rarity:'史诗', speed:1.7, death:0.05, desc:'稳健远行，万里不殆', body:'#a16207', wing:'#78350f', type:'goose' },
+  blue:   { id:'blue',   name:'青鸟', rarity:'传说', speed:2.0, death:0.00, desc:'神鸟通灵，永陨不坠', body:'#0e7490', wing:'#0891b2', type:'bluebird' }
 };
-const ANI_ORDER = ['dove','swallow','white','goose','eagle','blue'];
+const ANI_ORDER = ['dove','swallow','eagle','white','goose','blue'];
 const NAME_POOL = ['墨翎','云翼','逐月','乘风','破晓','听雪','渡星','栖霞','凌川','望舒','衔枝','归鸿','振羽','穿林','映霜','逐光','落梅','栖云','踏雪','鸣涧'];
+
+/* 殒命随机事件池 */
+const DEATH_EVENTS = [
+  '遭遇暴风骤雨，翅折羽落',
+  '为猎人箭矢所伤，坠于荒野',
+  '迷失于崇山峻岭，再无归途',
+  '寒夜霜重，冻毙于枯枝之上',
+  '遭猛禽袭击，力竭而陨',
+  '长途跋涉，力竭坠于河川',
+  '误入瘴气密林，再未飞出',
+  '雷劈电击，焚于半空'
+];
+function pickDeathEvent(){
+  return DEATH_EVENTS[Math.floor(Math.random() * DEATH_EVENTS.length)];
+}
 
 function loadAnimals(){
   let a = {};
@@ -1629,36 +1655,57 @@ function animalSvg(id, cls){
   const c = cls ? 'class="'+cls+'"' : '';
   if(a.type === 'swallow'){
     return `<svg viewBox="0 0 64 64" ${c}><g class="bird-body">
-      <path class="bird-wing" d="M32 24 C22 10 4 8 0 14 C8 20 20 24 32 26" fill="${a.wing}"/>
-      <path class="bird-wing wing-r" d="M32 24 C42 10 60 8 64 14 C56 20 44 24 32 26" fill="${a.wing}"/>
-      <ellipse cx="32" cy="28" rx="12" ry="9" fill="${a.body}"/>
-      <circle cx="42" cy="24" r="6" fill="${a.body}"/>
-      <path d="M48 23 L56 22 L48 26Z" fill="#c0392b"/>
-      <circle cx="44" cy="23" r="1.5" fill="#1a1a1a"/>
-      <path d="M20 32 L12 44 L22 40 L16 50" stroke="${a.wing}" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path class="bird-wing" d="M32 22 C20 4 0 2 0 12 C8 18 20 22 32 24" fill="${a.wing}"/>
+      <path class="bird-wing wing-r" d="M32 22 C44 4 64 2 64 12 C56 18 44 22 32 24" fill="${a.wing}"/>
+      <ellipse cx="32" cy="28" rx="10" ry="8" fill="${a.body}"/>
+      <circle cx="40" cy="23" r="5" fill="${a.body}"/>
+      <path d="M45 22 L52 21 L45 25Z" fill="#c0392b"/>
+      <circle cx="42" cy="22" r="1.3" fill="#1a1a1a"/>
+      <path d="M24 32 L14 48 L24 42 L18 56" stroke="${a.wing}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
     </g></svg>`;
   }
   if(a.type === 'goose'){
     return `<svg viewBox="0 0 64 64" ${c}><g class="bird-body">
-      <path class="bird-wing" d="M32 22 C22 6 4 4 2 12 C10 18 22 22 32 24" fill="${a.wing}"/>
-      <path class="bird-wing wing-r" d="M32 22 C42 6 60 4 62 12 C54 18 42 22 32 24" fill="${a.wing}"/>
-      <ellipse cx="30" cy="32" rx="14" ry="10" fill="${a.body}"/>
-      <path d="M42 28 C50 24 56 26 60 30 C54 32 48 32 42 32" fill="${a.body}"/>
-      <circle cx="52" cy="29" r="3.5" fill="${a.wing}"/>
-      <path d="M58 29 L64 28 L58 31Z" fill="#d97706"/>
-      <circle cx="53" cy="28" r="1.2" fill="#1a1a1a"/>
+      <path class="bird-wing" d="M30 20 C18 2 -4 0 -2 10 C8 16 20 20 30 22" fill="${a.wing}"/>
+      <path class="bird-wing wing-r" d="M30 20 C42 2 64 0 66 10 C56 16 44 20 30 22" fill="${a.wing}"/>
+      <ellipse cx="28" cy="34" rx="13" ry="9" fill="${a.body}"/>
+      <path d="M14 32 C8 36 6 42 8 48 C12 44 16 40 20 38" fill="${a.wing}" opacity=".7"/>
+      <path d="M38 30 C48 26 56 28 62 32 C56 34 48 36 38 34" fill="${a.body}"/>
+      <circle cx="54" cy="31" r="4" fill="${a.wing}"/>
+      <path d="M60 31 L66 30 L60 33Z" fill="#f59e0b"/>
+      <circle cx="55" cy="30" r="1.2" fill="#1a1a1a"/>
     </g></svg>`;
   }
   if(a.type === 'eagle'){
     return `<svg viewBox="0 0 64 64" ${c}><g class="bird-body">
-      <path class="bird-wing" d="M32 22 C20 4 -2 2 0 12 C10 18 22 22 32 24" fill="${a.wing}"/>
-      <path class="bird-wing wing-r" d="M32 22 C44 4 66 2 64 12 C54 18 42 22 32 24" fill="${a.wing}"/>
-      <ellipse cx="32" cy="30" rx="11" ry="9" fill="${a.body}"/>
-      <path d="M41 25 C48 22 54 24 58 28 L52 30 L42 30" fill="${a.body}"/>
-      <path d="M58 28 L64 27 L58 30Z" fill="#fbbf24"/>
-      <circle cx="50" cy="26" r="1.8" fill="#fef3c7"/>
-      <circle cx="50" cy="26" r="1" fill="#1a1a1a"/>
-      <path d="M32 36 L26 48 L34 44 L30 52" stroke="${a.wing}" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path class="bird-wing" d="M30 18 C14 0 -6 -2 -4 10 C8 16 20 20 30 22" fill="${a.wing}"/>
+      <path class="bird-wing wing-r" d="M30 18 C46 0 66 -2 68 10 C56 16 44 20 30 22" fill="${a.wing}"/>
+      <ellipse cx="30" cy="30" rx="12" ry="10" fill="${a.body}"/>
+      <path d="M16 28 C10 32 8 40 12 48 C16 42 20 36 24 34" fill="${a.wing}" opacity=".6"/>
+      <path d="M40 26 C48 22 56 24 62 30 L54 32 L42 32" fill="${a.body}"/>
+      <path d="M62 30 L68 28 L62 32Z" fill="#fbbf24"/>
+      <circle cx="52" cy="28" r="2" fill="#fef3c7"/>
+      <circle cx="52" cy="28" r="1.1" fill="#1a1a1a"/>
+      <path d="M56 34 L60 38 L56 38Z" fill="#fbbf24"/>
+      <path d="M28 38 L22 52 L30 48 L24 58" stroke="${a.wing}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    </g></svg>`;
+  }
+  if(a.type === 'bluebird'){
+    // 青鸟：神鸟造型，带光环和长尾羽
+    return `<svg viewBox="0 0 64 64" ${c}><g class="bird-body">
+      <circle cx="32" cy="28" r="22" fill="none" stroke="#22d3ee" stroke-width="0.8" opacity=".4" class="halo"/>
+      <path class="bird-wing" d="M30 18 C16 2 -2 0 -2 10 C8 16 20 20 30 22" fill="${a.wing}"/>
+      <path class="bird-wing wing-r" d="M30 18 C44 2 62 0 62 10 C52 16 40 20 30 22" fill="${a.wing}"/>
+      <ellipse cx="30" cy="30" rx="11" ry="9" fill="${a.body}"/>
+      <path d="M20 28 C14 32 12 38 14 44 C18 40 22 36 26 34" fill="#06b6d4" opacity=".5"/>
+      <path d="M40 26 C48 22 56 24 60 28 L54 30 L42 30" fill="${a.body}"/>
+      <path d="M60 28 L65 27 L60 30Z" fill="#22d3ee"/>
+      <circle cx="52" cy="27" r="2" fill="#cffafe"/>
+      <circle cx="52" cy="27" r="1.1" fill="#0c4a6e"/>
+      <path d="M28 36 C26 44 24 52 26 60 C30 54 32 46 32 38" fill="${a.wing}" opacity=".8"/>
+      <path d="M32 36 C34 46 36 54 34 60" stroke="#22d3ee" stroke-width="1.5" fill="none" opacity=".6"/>
+      <circle cx="20" cy="14" r="1.5" fill="#22d3ee" opacity=".7" class="halo-dot"/>
+      <circle cx="44" cy="10" r="1" fill="#67e8f9" opacity=".6" class="halo-dot"/>
     </g></svg>`;
   }
   // normal 鸽类
@@ -1682,7 +1729,7 @@ function renderAnimals(){
     const locked = count <= 0;
     const card = document.createElement('div');
     card.className = 'animal-card' + (locked?' locked':'');
-    const rk = a.rarity === '史诗' ? 'epic' : a.rarity === '传说' ? 'legend' : '';
+    const rk = a.rarity === '史诗' ? 'epic' : a.rarity === '传说' ? 'legend' : a.rarity === '稀有' ? 'rare' : '';
     const display = animalDisplay(id);
     card.innerHTML = `
       <span class="rarity ${rk}">${a.rarity}</span>
@@ -1835,17 +1882,35 @@ dom.btnRedeemConfirm.addEventListener('click', () => {
   }
 });
 
+/* ---------- 粘贴收件人信箱号 ---------- */
+dom.btnPasteBox.addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if(!text){ toast('剪贴板为空'); return; }
+    // 从"飞鸽传书信箱XXXXXX"或纯6位码中提取
+    const m = text.match(/[A-HJ-NP-Z2-9]{6}/i);
+    if(m){
+      dom.toBox.value = m[0].toUpperCase();
+      toast('已填入信箱号', true);
+    } else {
+      toast('未识别到信箱号');
+    }
+  } catch(e){
+    toast('请手动输入信箱号');
+  }
+});
+
 /* ---------- 信箱号分享 ---------- */
 dom.btnShare.addEventListener('click', async () => {
-  const url = location.origin + location.pathname + '?box=' + state.box;
+  const text = '飞鸽传书信箱' + state.box;
   try {
-    await navigator.clipboard.writeText(url);
-    toast('分享链接已抄录，发给友人即可', true);
+    await navigator.clipboard.writeText(text);
+    toast('已抄录「' + text + '」，发给友人即可', true);
   } catch(e){
     const ta = document.createElement('textarea');
-    ta.value = url; document.body.appendChild(ta); ta.select();
+    ta.value = text; document.body.appendChild(ta); ta.select();
     document.execCommand('copy'); ta.remove();
-    toast('分享链接已抄录', true);
+    toast('已抄录「' + text + '」', true);
   }
 });
 
