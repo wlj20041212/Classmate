@@ -1610,12 +1610,18 @@ function renderMiniMap(el, a, b, deliverAt, animalId) {
   L.polyline(arc, { color: '#a88a3e', weight: 1.5, dashArray: '4 6', opacity: .8 }).addTo(map);
   L.circleMarker([a.lat, a.lng], { radius: 4, color: '#c0392b', weight: 2, fillColor: '#c0392b', fillOpacity: 1 }).addTo(map);
   L.circleMarker([b.lat, b.lng], { radius: 4, color: '#4c443b', weight: 2, fillColor: '#4c443b', fillOpacity: 1 }).addTo(map);
-  map.fitBounds(L.latLngBounds(arc).pad(0.4));
   const svg = animalId ? animalSvg(animalId) : PIGEON_SVG;
   const icon = L.divIcon({ className: '', html: `<div class="pigeon-ico">${svg}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] });
   L.marker(a, { icon, interactive: false }).addTo(map);
-  // 展开后容器尺寸才正确，需刷新（延时确保 display:block 生效）
-  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 50);
+  // 先 invalidateSize 修正容器尺寸，再 fitBounds 固定比例（顺序不能反，否则地图会缩到最小）
+  const fitAndFix = () => {
+    if (!el.isConnected) return;
+    map.invalidateSize();
+    map.fitBounds(L.latLngBounds(arc).pad(0.4));
+  };
+  fitAndFix();
+  setTimeout(fitAndFix, 50);
+  setTimeout(fitAndFix, 200);
 }
 
 /* ============================================================

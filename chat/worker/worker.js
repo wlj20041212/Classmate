@@ -513,16 +513,13 @@ async function handleMigrate(request, env) {
     if (!oldBox || !newBox) return json({ error: '参数缺失' }, 400);
     let migrated = 0;
 
-    // 用 get 读取旧信箱索引（替代 list）
-    let inboxIds = await getIndex(env, `idx:inbox:${oldBox}`);
-    // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
-    if (inboxIds.length === 0) {
-      const oldList = await env.MESSAGES.list({ prefix: `inbox:${oldBox}:` });
-      if (oldList.keys.length > 0) {
-        inboxIds = oldList.keys.map((k) => k.name.split(':')[2]);
-        await setIndex(env, `idx:inbox:${oldBox}`, inboxIds);
-      }
-    }
+    // 直接 list 读取旧收件箱（实时性好），再合并索引（双保险）
+    const inboxList = await env.MESSAGES.list({ prefix: `inbox:${oldBox}:` });
+    let inboxIds = inboxList.keys.map((k) => k.name.split(':')[2]);
+    const inboxIdxIds = await getIndex(env, `idx:inbox:${oldBox}`);
+    const inboxSet = new Set(inboxIds);
+    inboxIdxIds.forEach((id) => inboxSet.add(id));
+    inboxIds = Array.from(inboxSet);
     for (const id of inboxIds) {
       const raw = await env.MESSAGES.get(`msg:${id}`);
       if (!raw) continue;
@@ -533,20 +530,20 @@ async function handleMigrate(request, env) {
         // 更新索引：从旧信箱移除，加到新信箱
         await indexRemove(env, `idx:inbox:${oldBox}`, id);
         await indexPush(env, `idx:inbox:${newBox}`, id);
+        // 更新旧 key：删旧的、写新的（list 读取依赖前缀）
+        await env.MESSAGES.delete(`inbox:${oldBox}:${id}`);
+        await env.MESSAGES.put(`inbox:${newBox}:${id}`, id);
         migrated++;
       }
     }
 
-    // 用 get 读取旧发件箱索引（替代 list）
-    let sentIds = await getIndex(env, `idx:sent:${oldBox}`);
-    // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
-    if (sentIds.length === 0) {
-      const oldList = await env.MESSAGES.list({ prefix: `sent:${oldBox}:` });
-      if (oldList.keys.length > 0) {
-        sentIds = oldList.keys.map((k) => k.name.split(':')[2]);
-        await setIndex(env, `idx:sent:${oldBox}`, sentIds);
-      }
-    }
+    // 直接 list 读取旧发件箱（实时性好），再合并索引（双保险）
+    const sentList = await env.MESSAGES.list({ prefix: `sent:${oldBox}:` });
+    let sentIds = sentList.keys.map((k) => k.name.split(':')[2]);
+    const sentIdxIds = await getIndex(env, `idx:sent:${oldBox}`);
+    const sentSet = new Set(sentIds);
+    sentIdxIds.forEach((id) => sentSet.add(id));
+    sentIds = Array.from(sentSet);
     for (const id of sentIds) {
       const raw = await env.MESSAGES.get(`msg:${id}`);
       if (!raw) continue;
@@ -557,6 +554,9 @@ async function handleMigrate(request, env) {
         // 更新索引
         await indexRemove(env, `idx:sent:${oldBox}`, id);
         await indexPush(env, `idx:sent:${newBox}`, id);
+        // 更新旧 key：删旧的、写新的（list 读取依赖前缀）
+        await env.MESSAGES.delete(`sent:${oldBox}:${id}`);
+        await env.MESSAGES.put(`sent:${newBox}:${id}`, id);
         migrated++;
       }
     }
