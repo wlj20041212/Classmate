@@ -227,7 +227,22 @@ async function handleInbox(request, env, url) {
   const lng = url.searchParams.get('lng');
 
   // 用 get 读取索引（替代 list）
-  const ids = await getIndex(env, `idx:inbox:${box}`);
+  let ids = await getIndex(env, `idx:inbox:${box}`);
+  // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
+  if (ids.length === 0) {
+    const oldList = await env.MESSAGES.list({ prefix: `inbox:${box}:` });
+    if (oldList.keys.length > 0) {
+      ids = oldList.keys.map((k) => k.name.split(':')[2]);
+      // 把旧信件ID补进新索引（一次性迁移）
+      await setIndex(env, `idx:inbox:${box}`, ids);
+      // 同时补进 idx:all（owner用）
+      const allIds = await getIndex(env, 'idx:all');
+      for (const id of ids) {
+        if (!allIds.includes(id)) allIds.push(id);
+      }
+      await setIndex(env, 'idx:all', allIds);
+    }
+  }
   const messages = [];
   for (const id of ids) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
@@ -257,7 +272,20 @@ async function handleSent(request, env, url) {
   if (!from) return json({ error: '缺少信箱号' }, 400);
 
   // 用 get 读取索引（替代 list）
-  const ids = await getIndex(env, `idx:sent:${from}`);
+  let ids = await getIndex(env, `idx:sent:${from}`);
+  // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
+  if (ids.length === 0) {
+    const oldList = await env.MESSAGES.list({ prefix: `sent:${from}:` });
+    if (oldList.keys.length > 0) {
+      ids = oldList.keys.map((k) => k.name.split(':')[2]);
+      await setIndex(env, `idx:sent:${from}`, ids);
+      const allIds = await getIndex(env, 'idx:all');
+      for (const id of ids) {
+        if (!allIds.includes(id)) allIds.push(id);
+      }
+      await setIndex(env, 'idx:all', allIds);
+    }
+  }
   const messages = [];
   for (const id of ids) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
@@ -363,7 +391,24 @@ async function handleOwnerMessages(request, env, url) {
   const filterStatus = url.searchParams.get('status');
 
   // 用 get 读取全局索引（替代 list）
-  const ids = await getIndex(env, 'idx:all');
+  let ids = await getIndex(env, 'idx:all');
+  // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
+  if (ids.length === 0) {
+    const oldList = await env.MESSAGES.list({ prefix: 'msg:' });
+    if (oldList.keys.length > 0) {
+      ids = oldList.keys.map((k) => k.name.slice(4));
+      await setIndex(env, 'idx:all', ids);
+      // 同时补进各信箱索引
+      for (const id of ids) {
+        const raw = await env.MESSAGES.get(`msg:${id}`);
+        if (raw) {
+          const msg = JSON.parse(raw);
+          if (msg.to) await indexPush(env, `idx:inbox:${msg.to}`, id);
+          if (msg.from) await indexPush(env, `idx:sent:${msg.from}`, id);
+        }
+      }
+    }
+  }
   const messages = [];
   for (const id of ids) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
