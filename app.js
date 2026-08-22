@@ -2348,12 +2348,23 @@ class AuthView {
         this.container.innerHTML = `
             <div class="auth-view owner-mode">
                 <span class="mode-label">模式: <strong style="color: #FFD700;">Owner</strong></span>
+                <button id="btnViewMessages" class="btn btn-primary" title="查看飞鸽传书所有信件" style="margin-right:6px">
+                    🕊️ 信件
+                </button>
                 <button id="logoutButton" class="btn btn-secondary" title="退出 Owner 模式">
                     退出
                 </button>
             </div>
         `;
         
+        // 绑定信件查看按钮
+        const btnViewMessages = document.getElementById('btnViewMessages');
+        if (btnViewMessages) {
+            btnViewMessages.addEventListener('click', () => {
+                location.href = '/chat.html?owner=1';
+            });
+        }
+
         // 绑定退出按钮事件
         const logoutButton = document.getElementById('logoutButton');
         if (logoutButton) {
@@ -2478,6 +2489,19 @@ class AuthView {
                 // 登录成功
                 console.log('[AuthView] 登录成功');
                 showToast('登录成功，欢迎进入 Owner 模式！', 'success');
+                
+                // 用密码调飞鸽传书 Worker 获取 owner token（供信件查看使用）
+                try {
+                    const r = await fetch('https://letter.wanglejiang.top/chat/api/owner-login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+                    if (r.ok) {
+                        const d = await r.json();
+                        if (d.token) sessionStorage.setItem('pigeon_owner_token', d.token);
+                    }
+                } catch (e) { /* 飞鸽传书 token 获取失败不影响主站登录 */ }
                 
                 // 关闭对话框
                 document.body.removeChild(dialog);

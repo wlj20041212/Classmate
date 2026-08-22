@@ -430,9 +430,9 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
   position:absolute;top:8px;right:8px;font-size:10px;letter-spacing:.1em;
   padding:2px 7px;border-radius:9px;background:var(--paper-line);color:var(--ink-soft);
 }
-.animal-card .rarity.epic{background:rgba(168,138,62,.18);color:#a88a3e}
-.animal-card .rarity.legend{background:rgba(192,57,43,.16);color:var(--cinnabar)}
-.animal-card .rarity.rare{background:rgba(59,130,246,.16);color:#3b82f6}
+.animal-card .rarity.epic{background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;text-shadow:0 1px 2px rgba(124,58,237,.5);box-shadow:0 2px 6px rgba(168,85,247,.4)}
+.animal-card .rarity.legend{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;text-shadow:0 1px 2px rgba(185,28,28,.5);box-shadow:0 2px 6px rgba(239,68,68,.4)}
+.animal-card .rarity.rare{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;text-shadow:0 1px 2px rgba(245,158,11,.5);box-shadow:0 2px 6px rgba(251,191,36,.4)}
 .animal-card .ani-svg{width:64px;height:64px;margin:4px auto 6px;display:block}
 .animal-card .ani-name{font-family:var(--kai);font-size:17px;letter-spacing:.1em;text-align:center;color:var(--ink)}
 .animal-card .ani-pet{font-size:11px;color:var(--ink-faint);text-align:center;margin-top:2px;letter-spacing:.04em}
@@ -564,9 +564,61 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
   animation:birdFloat 3.4s ease-in-out infinite;
 }
 @keyframes birdFloat{0%,100%{opacity:0;transform:translate(0,0)}45%{opacity:.7;transform:translate(-6px,-4px)}55%{opacity:.7;transform:translate(8px,-2px)}}
+/* 返回主站按钮 */
+.btn-back-home{
+  position:fixed;top:12px;left:10px;z-index:200;
+  width:34px;height:34px;border:none;border-radius:50%;
+  background:var(--cinnabar);color:var(--paper);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 2px 8px rgba(142,42,31,.4);
+  transition:transform .2s;
+}
+.btn-back-home:active{transform:scale(.9)}
+.btn-back-home svg{width:18px;height:18px;fill:currentColor}
+
+/* Owner 面板 */
+.owner-panel{
+  position:fixed;inset:0;z-index:500;background:var(--paper);
+  overflow-y:auto;display:none;
+}
+.owner-panel.show{display:block}
+.owner-head{
+  position:sticky;top:0;background:var(--ink);color:var(--paper);
+  padding:12px 16px;display:flex;align-items:center;gap:12px;
+  z-index:10;
+}
+.owner-head h2{font-size:16px;font-family:var(--kai);flex:1}
+.owner-head .btn{background:var(--cinnabar);color:var(--paper);border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px}
+.owner-head .btn-logout{background:transparent;border:1px solid rgba(245,240,230,.4)}
+.owner-filter{padding:10px 16px;background:rgba(255,255,255,.5);display:flex;gap:8px;flex-wrap:wrap;position:sticky;top:46px;z-index:9}
+.owner-filter input,.owner-filter select{
+  padding:6px 10px;border:1px solid var(--paper-line);border-radius:4px;font-size:13px;background:var(--paper);
+}
+.owner-filter button{padding:6px 14px;background:var(--ink);color:var(--paper);border:none;border-radius:4px;cursor:pointer;font-size:13px}
+.owner-list{padding:10px 16px}
+.owner-item{
+  background:rgba(255,255,255,.6);border:1px solid var(--paper-line);
+  border-radius:6px;padding:12px;margin-bottom:10px;font-size:13px;line-height:1.6;
+}
+.owner-item .oi-head{display:flex;justify-content:space-between;margin-bottom:6px}
+.owner-item .oi-from{color:var(--cinnabar);font-weight:700}
+.owner-item .oi-status{font-size:11px;padding:2px 8px;border-radius:3px}
+.owner-item .oi-status.flying{background:#fef3c7;color:#92400e}
+.owner-item .oi-status.delivered{background:#dcfce7;color:#166534}
+.owner-item .oi-status.read{background:#dbeafe;color:#1e40af}
+.owner-item .oi-status.dead{background:#fee2e2;color:#991b1b}
+.owner-item .oi-status.recalled{background:#f3f4f6;color:#6b7280}
+.owner-item .oi-content{background:var(--paper);padding:8px 10px;border-radius:4px;border:1px solid var(--paper-line);margin:6px 0;white-space:pre-wrap;word-break:break-all}
+.owner-item .oi-meta{color:var(--ink-faint);font-size:11px}
+.owner-item .oi-dead{color:#991b1b;font-size:12px;margin-top:4px}
 </style>
 </head>
 <body>
+
+<!-- 返回主站按钮 -->
+<button class="btn-back-home" id="btnBackHome" title="返回主站" aria-label="返回主站">
+  <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+</button>
 
 <!-- 顶栏 -->
 <header class="masthead">
@@ -681,7 +733,7 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
       <span class="refresh" style="font-size:12px;color:var(--ink-faint)">不同信使，生死有命</span>
     </div>
     <p style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin:4px 0 8px;letter-spacing:.04em">
-      <b>普通</b>·常有陨落 ／ <b style="color:#3b82f6">稀有</b>·偶有陨落 ／ <b style="color:#a88a3e">史诗</b>·罕有陨落 ／ <b style="color:var(--cinnabar)">传说</b>·永陨不坠
+      <b>普通</b>·常有陨落 ／ <b style="background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700">稀有</b>·偶有陨落 ／ <b style="background:linear-gradient(135deg,#a855f7,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700">史诗</b>·罕有陨落 ／ <b style="background:linear-gradient(135deg,#ef4444,#b91c1c);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700">传说</b>·永陨不坠
     </p>
     <div class="animal-grid" id="animalGrid"></div>
     <div class="animal-actions">
@@ -756,6 +808,29 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
   </div>
 </div>
 
+<!-- Owner 管理面板（通过主站 ?owner=1 激活，无登录入口） -->
+<div class="owner-panel" id="ownerPanel">
+  <div class="owner-head">
+    <h2>飞鸽总站 · 掌柜后台</h2>
+    <button class="btn" id="btnOwnerRefresh">刷新</button>
+    <button class="btn btn-logout" id="btnOwnerBack">返回</button>
+  </div>
+  <div class="owner-filter">
+    <input type="text" id="ownerFilterBox" placeholder="信箱号筛选" maxlength="6">
+    <select id="ownerFilterStatus">
+      <option value="">全部状态</option>
+      <option value="flying">飞行中</option>
+      <option value="delivered">已送达</option>
+      <option value="read">已读</option>
+      <option value="dead">殒命</option>
+      <option value="recalled">已召回</option>
+    </select>
+    <button id="btnOwnerSearch">查询</button>
+    <span id="ownerTotal" style="color:var(--ink-faint);font-size:12px;align-self:center"></span>
+  </div>
+  <div class="owner-list" id="ownerList"></div>
+</div>
+
 <script>
 /* ============================================================
    飞鸽传书 · 前端逻辑
@@ -803,6 +878,10 @@ const dom = {
   btnRenameRandom: $('btnRenameRandom'), btnRenameConfirm: $('btnRenameConfirm'),
   btnPasteBox: $('btnPasteBox'),
   messengerBar: null,
+  btnBackHome: $('btnBackHome'),
+  ownerPanel: $('ownerPanel'), btnOwnerRefresh: $('btnOwnerRefresh'), btnOwnerBack: $('btnOwnerBack'),
+  ownerFilterBox: $('ownerFilterBox'), ownerFilterStatus: $('ownerFilterStatus'),
+  btnOwnerSearch: $('btnOwnerSearch'), ownerList: $('ownerList'), ownerTotal: $('ownerTotal'),
 };
 
 /* ---------- 信箱号 ---------- */
@@ -1810,11 +1889,11 @@ function renderMessengerBar(){
 
 /* ---------- 看广告获取动物 ---------- */
 dom.btnAd.addEventListener('click', () => {
-  // 随机跳转 AI 或 Christmas，7秒后自动返回
+  // 随机跳转 AI 或 Christmas，5秒后自动返回
   const target = Math.random() < 0.5 ? '/ai.html' : '/christmas.html';
-  const returnUrl = location.origin + location.pathname;
+  const returnUrl = location.origin + location.pathname + '?tab=animal';
   localStorage.setItem('pigeon_ad', JSON.stringify({ start: Date.now(), return: returnUrl }));
-  // 带 from=chat 参数，目标页面检测后7秒倒计时自动返回
+  // 带 from=chat 参数，目标页面检测后5秒倒计时自动返回
   location.href = target + '?from=chat&return=' + encodeURIComponent(returnUrl);
 });
 
@@ -1827,7 +1906,7 @@ function checkAdReward(){
   // 已结算过则跳过
   if(info.rewarded){ return; }
   const elapsed = Date.now() - info.start;
-  if(elapsed < 6000){ return; } // 未满7秒，不发奖励
+  if(elapsed < 4000){ return; } // 未满5秒，不发奖励
   // 结算：随机获得一只（白鸽/苍鹰低概率）
   const r = Math.random();
   let getId;
@@ -1839,6 +1918,8 @@ function checkAdReward(){
   info.rewarded = true;
   localStorage.setItem('pigeon_ad', JSON.stringify(info));
   showGainToast(getId);
+  // 跳转到信使页
+  switchTab('animal');
   // 清除标记
   setTimeout(() => localStorage.removeItem('pigeon_ad'), 1000);
 }
@@ -1922,6 +2003,76 @@ dom.btnShare.addEventListener('click', async () => {
   }
 });
 
+/* ---------- 返回主站 ---------- */
+dom.btnBackHome.addEventListener('click', () => {
+  location.href = '/';
+});
+
+/* ============================================================
+   Owner 面板（通过主站 ?owner=1 激活，无登录入口）
+   ============================================================ */
+const ownerState = { loaded: false };
+
+function openOwnerPanel() {
+  dom.ownerPanel.classList.add('show');
+  if (!ownerState.loaded) {
+    ownerState.loaded = true;
+    loadOwnerMessages();
+  }
+}
+
+async function loadOwnerMessages() {
+  dom.ownerList.innerHTML = '<div style="text-align:center;color:var(--ink-faint);padding:20px">载入中…</div>';
+  try {
+    const params = new URLSearchParams();
+    const box = dom.ownerFilterBox.value.trim().toUpperCase();
+    const status = dom.ownerFilterStatus.value;
+    if (box) params.set('box', box);
+    if (status) params.set('status', status);
+    // 从 sessionStorage 读取主站传来的 token
+    const token = sessionStorage.getItem('pigeon_owner_token') || '';
+    const res = await fetch(`${API_BASE}/owner/messages?${params}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.status === 401) {
+      dom.ownerList.innerHTML = '<div style="text-align:center;color:var(--cinnabar);padding:20px">未授权，请从主站 Owner 登录后进入</div>';
+      return;
+    }
+    const data = await res.json();
+    renderOwnerMessages(data.messages || []);
+    dom.ownerTotal.textContent = '共 ' + (data.total || 0) + ' 封';
+  } catch (e) {
+    dom.ownerList.innerHTML = '<div style="text-align:center;color:var(--cinnabar);padding:20px">加载失败</div>';
+  }
+}
+
+function renderOwnerMessages(list) {
+  if (!list.length) {
+    dom.ownerList.innerHTML = '<div style="text-align:center;color:var(--ink-faint);padding:20px">暂无信件</div>';
+    return;
+  }
+  const statusMap = { flying:'飞行中', delivered:'已送达', read:'已读', dead:'殒命', recalled:'已召回' };
+  dom.ownerList.innerHTML = list.map(m => {
+    const ani = ANIMALS[m.animal] || ANIMALS.dove;
+    return `<div class="owner-item">
+      <div class="oi-head">
+        <span class="oi-from">${m.from || '匿名'} → ${m.to}</span>
+        <span class="oi-status ${m.status}">${statusMap[m.status] || m.status}</span>
+      </div>
+      <div class="oi-meta">信使：${ani.name}${m.petName ? '·' + m.petName : ''} · 发送：${m.createdAt} · 预达：${m.deliverAt}${m.readAt ? ' · 已读：' + m.readAt : ''}</div>
+      <div class="oi-content">${esc(m.content || '')}</div>
+      ${m.status === 'dead' ? `<div class="oi-dead">殒命：${esc(m.deathReason || '未详')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+dom.btnOwnerRefresh.addEventListener('click', loadOwnerMessages);
+dom.btnOwnerSearch.addEventListener('click', loadOwnerMessages);
+dom.btnOwnerBack.addEventListener('click', () => {
+  dom.ownerPanel.classList.remove('show');
+  location.href = '/';
+});
+
 /* ============================================================
    启动
    ============================================================ */
@@ -1941,6 +2092,13 @@ dom.btnShare.addEventListener('click', async () => {
   if(boxParam && /^[A-HJ-NP-Z2-9]{6}$/i.test(boxParam)){
     dom.toBox.value = boxParam.toUpperCase();
     switchTab('send');
+  }
+  // ?tab=animal 切到信使页
+  const tabParam = params.get('tab');
+  if(tabParam === 'animal') switchTab('animal');
+  // ?owner=1 主站 owner 跳转，激活面板
+  if(params.get('owner') === '1'){
+    openOwnerPanel();
   }
   // 从广告页返回，结算奖励
   checkAdReward();
