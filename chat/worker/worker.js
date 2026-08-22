@@ -228,30 +228,41 @@ async function handleInbox(request, env, url) {
   const lng = url.searchParams.get('lng');
 
   // 直接 list 读取（实时性好，避免索引最终一致性问题）
-  const list = await env.MESSAGES.list({ prefix: `inbox:${box}:` });
-  let ids = list.keys.map((k) => k.name.split(':')[2]);
+  const idSet = new Set();
+  try {
+    const list = await env.MESSAGES.list({ prefix: `inbox:${box}:` });
+    if (list && list.keys) {
+      list.keys.forEach((k) => {
+        const parts = k.name.split(':');
+        if (parts.length >= 3) idSet.add(parts[2]);
+      });
+    }
+  } catch (e) {}
   // 合并索引中的id（双保险）
-  const idxIds = await getIndex(env, `idx:inbox:${box}`);
-  const idSet = new Set(ids);
-  idxIds.forEach((id) => idSet.add(id));
-  ids = Array.from(idSet);
+  try {
+    const idxIds = await getIndex(env, `idx:inbox:${box}`);
+    idxIds.forEach((id) => idSet.add(id));
+  } catch (e) {}
+  const ids = Array.from(idSet);
   const messages = [];
   for (const id of ids) {
-    const raw = await env.MESSAGES.get(`msg:${id}`);
-    if (!raw) continue;
-    let msg = JSON.parse(raw);
-    // 跳过已被收件人删除的
-    if (msg.inboxDeletedBy === box) continue;
-    // 记录收件人定位（首次）
-    if (lat && lng && !msg.toGPS && msg.to === box) {
-      msg.toGPS = { lat: parseFloat(lat), lng: parseFloat(lng) };
-      await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
-    }
-    // 按需计算状态
-    msg = await computeStatus(msg, env);
-    // 映射置顶字段
-    msg.pinned = !!msg.pinnedByReceiver;
-    messages.push(msg);
+    try {
+      const raw = await env.MESSAGES.get(`msg:${id}`);
+      if (!raw) continue;
+      let msg = JSON.parse(raw);
+      // 跳过已被收件人删除的
+      if (msg.inboxDeletedBy === box) continue;
+      // 记录收件人定位（首次）
+      if (lat && lng && !msg.toGPS && msg.to === box) {
+        msg.toGPS = { lat: parseFloat(lat), lng: parseFloat(lng) };
+        await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+      }
+      // 按需计算状态
+      msg = await computeStatus(msg, env);
+      // 映射置顶字段
+      msg.pinned = !!msg.pinnedByReceiver;
+      messages.push(msg);
+    } catch (e) {}
   }
 
   messages.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -264,24 +275,35 @@ async function handleSent(request, env, url) {
   if (!from) return json({ error: '缺少信箱号' }, 400);
 
   // 直接 list 读取（实时性好，避免索引最终一致性问题）
-  const list = await env.MESSAGES.list({ prefix: `sent:${from}:` });
-  let ids = list.keys.map((k) => k.name.split(':')[2]);
+  const idSet = new Set();
+  try {
+    const list = await env.MESSAGES.list({ prefix: `sent:${from}:` });
+    if (list && list.keys) {
+      list.keys.forEach((k) => {
+        const parts = k.name.split(':');
+        if (parts.length >= 3) idSet.add(parts[2]);
+      });
+    }
+  } catch (e) {}
   // 合并索引中的id（双保险）
-  const idxIds = await getIndex(env, `idx:sent:${from}`);
-  const idSet = new Set(ids);
-  idxIds.forEach((id) => idSet.add(id));
-  ids = Array.from(idSet);
+  try {
+    const idxIds = await getIndex(env, `idx:sent:${from}`);
+    idxIds.forEach((id) => idSet.add(id));
+  } catch (e) {}
+  const ids = Array.from(idSet);
   const messages = [];
   for (const id of ids) {
-    const raw = await env.MESSAGES.get(`msg:${id}`);
-    if (!raw) continue;
-    let msg = JSON.parse(raw);
-    // 跳过已被发件人删除的
-    if (msg.sentDeletedBy === from) continue;
-    msg = await computeStatus(msg, env);
-    // 映射置顶字段
-    msg.pinned = !!msg.pinnedBySender;
-    messages.push(msg);
+    try {
+      const raw = await env.MESSAGES.get(`msg:${id}`);
+      if (!raw) continue;
+      let msg = JSON.parse(raw);
+      // 跳过已被发件人删除的
+      if (msg.sentDeletedBy === from) continue;
+      msg = await computeStatus(msg, env);
+      // 映射置顶字段
+      msg.pinned = !!msg.pinnedBySender;
+      messages.push(msg);
+    } catch (e) {}
   }
 
   messages.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -513,52 +535,68 @@ async function handleMigrate(request, env) {
     if (!oldBox || !newBox) return json({ error: '参数缺失' }, 400);
     let migrated = 0;
 
-    // 直接 list 读取旧收件箱（实时性好），再合并索引（双保险）
-    const inboxList = await env.MESSAGES.list({ prefix: `inbox:${oldBox}:` });
-    let inboxIds = inboxList.keys.map((k) => k.name.split(':')[2]);
-    const inboxIdxIds = await getIndex(env, `idx:inbox:${oldBox}`);
-    const inboxSet = new Set(inboxIds);
-    inboxIdxIds.forEach((id) => inboxSet.add(id));
-    inboxIds = Array.from(inboxSet);
-    for (const id of inboxIds) {
-      const raw = await env.MESSAGES.get(`msg:${id}`);
-      if (!raw) continue;
-      const msg = JSON.parse(raw);
-      if (msg.status === 'flying' && msg.to === oldBox) {
-        msg.to = newBox;
-        await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
-        // 更新索引：从旧信箱移除，加到新信箱
-        await indexRemove(env, `idx:inbox:${oldBox}`, id);
-        await indexPush(env, `idx:inbox:${newBox}`, id);
-        // 更新旧 key：删旧的、写新的（list 读取依赖前缀）
-        await env.MESSAGES.delete(`inbox:${oldBox}:${id}`);
-        await env.MESSAGES.put(`inbox:${newBox}:${id}`, id);
-        migrated++;
+    // list 读取旧收件箱 + 合并索引（双保险）
+    const inboxSet = new Set();
+    try {
+      const inboxList = await env.MESSAGES.list({ prefix: `inbox:${oldBox}:` });
+      if (inboxList && inboxList.keys) {
+        inboxList.keys.forEach((k) => {
+          const parts = k.name.split(':');
+          if (parts.length >= 3) inboxSet.add(parts[2]);
+        });
       }
+    } catch (e) {}
+    try {
+      const inboxIdxIds = await getIndex(env, `idx:inbox:${oldBox}`);
+      inboxIdxIds.forEach((id) => inboxSet.add(id));
+    } catch (e) {}
+    for (const id of Array.from(inboxSet)) {
+      try {
+        const raw = await env.MESSAGES.get(`msg:${id}`);
+        if (!raw) continue;
+        const msg = JSON.parse(raw);
+        if (msg.status === 'flying' && msg.to === oldBox) {
+          msg.to = newBox;
+          await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+          await indexRemove(env, `idx:inbox:${oldBox}`, id);
+          await indexPush(env, `idx:inbox:${newBox}`, id);
+          await env.MESSAGES.delete(`inbox:${oldBox}:${id}`);
+          await env.MESSAGES.put(`inbox:${newBox}:${id}`, id);
+          migrated++;
+        }
+      } catch (e) {}
     }
 
-    // 直接 list 读取旧发件箱（实时性好），再合并索引（双保险）
-    const sentList = await env.MESSAGES.list({ prefix: `sent:${oldBox}:` });
-    let sentIds = sentList.keys.map((k) => k.name.split(':')[2]);
-    const sentIdxIds = await getIndex(env, `idx:sent:${oldBox}`);
-    const sentSet = new Set(sentIds);
-    sentIdxIds.forEach((id) => sentSet.add(id));
-    sentIds = Array.from(sentSet);
-    for (const id of sentIds) {
-      const raw = await env.MESSAGES.get(`msg:${id}`);
-      if (!raw) continue;
-      const msg = JSON.parse(raw);
-      if (msg.status === 'flying' && msg.from === oldBox) {
-        msg.from = newBox;
-        await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
-        // 更新索引
-        await indexRemove(env, `idx:sent:${oldBox}`, id);
-        await indexPush(env, `idx:sent:${newBox}`, id);
-        // 更新旧 key：删旧的、写新的（list 读取依赖前缀）
-        await env.MESSAGES.delete(`sent:${oldBox}:${id}`);
-        await env.MESSAGES.put(`sent:${newBox}:${id}`, id);
-        migrated++;
+    // list 读取旧发件箱 + 合并索引（双保险）
+    const sentSet = new Set();
+    try {
+      const sentList = await env.MESSAGES.list({ prefix: `sent:${oldBox}:` });
+      if (sentList && sentList.keys) {
+        sentList.keys.forEach((k) => {
+          const parts = k.name.split(':');
+          if (parts.length >= 3) sentSet.add(parts[2]);
+        });
       }
+    } catch (e) {}
+    try {
+      const sentIdxIds = await getIndex(env, `idx:sent:${oldBox}`);
+      sentIdxIds.forEach((id) => sentSet.add(id));
+    } catch (e) {}
+    for (const id of Array.from(sentSet)) {
+      try {
+        const raw = await env.MESSAGES.get(`msg:${id}`);
+        if (!raw) continue;
+        const msg = JSON.parse(raw);
+        if (msg.status === 'flying' && msg.from === oldBox) {
+          msg.from = newBox;
+          await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+          await indexRemove(env, `idx:sent:${oldBox}`, id);
+          await indexPush(env, `idx:sent:${newBox}`, id);
+          await env.MESSAGES.delete(`sent:${oldBox}:${id}`);
+          await env.MESSAGES.put(`sent:${newBox}:${id}`, id);
+          migrated++;
+        }
+      } catch (e) {}
     }
     return json({ ok: true, migrated });
   } catch (e) {
