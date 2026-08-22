@@ -1359,11 +1359,12 @@ async function sendMessage() {
   }
   // 实际送达时长：结合信使速度+随机误差
   const flyHours = computeActualFlyHours(userFlyHours, animal);
-  // 死亡判定：按动物死亡率，飞行时长越长风险略增
+  // 死亡判定：按动物死亡率，飞行时长越长风险略增，额外+5%殒命事件概率（青鸟不受额外概率影响）
   const baseDeath = animal.death;
   const lengthRisk = Math.min(flyHours / 168, 1) * 0.08; // 7日最多+8%
+  const extraRisk = animal.death === 0 ? 0 : 0.05; // 青鸟death=0，不加额外概率
   const deathRoll = Math.random();
-  const willDie = deathRoll < (baseDeath + lengthRisk);
+  const willDie = deathRoll < (baseDeath + lengthRisk + extraRisk);
   // 殒命原因（随机事件对象，含 icon 用于配图）
   const deathEvent = willDie ? pickDeathEvent() : null;
   const deathReason = deathEvent ? deathEvent.text : '';
@@ -2009,8 +2010,10 @@ function renderSent() {
           });
           if (!res.ok) throw new Error();
           m.status = 'recalled';
+          // 召回信使：归还一只信使（发信时已消耗）
+          if (m.animal) addAnimal(m.animal, 1);
           renderSent();
-          toast('信使已召回');
+          toast('信使已召回，已归还');
         } catch (e) { toast('飞鸽疲惫，稍后再试'); }
       });
       act.appendChild(rb);
