@@ -874,7 +874,8 @@ body.owner-open .tabbar{display:none}
 /* ---------- 常量与状态 ---------- */
 const API_BASE = 'https://letter.wanglejiang.top/chat/api';
 const LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 排除易混 0O1Il2Z5S8B
-const POLL_MS = 30000;
+const POLL_MS = 60000;          // 可见时轮询间隔（60秒，降低 Worker 调用）
+const POLL_MS_HIDDEN = 180000;  // 不可见时轮询间隔（3分钟，仅保活）
 
 const state = {
   box: '',
@@ -1874,23 +1875,36 @@ async function togglePinSent(id) {
 
 /* ============================================================
    轮询调度 / visibilitychange
+   优化 Cloudflare 额度：可见60秒/不可见3分钟/切回立即拉取
    ============================================================ */
 let pollTimer = null;
+let pollInterval = POLL_MS;
 function startPolling() {
   stopPolling();
+  pollInterval = document.visibilityState === 'visible' ? POLL_MS : POLL_MS_HIDDEN;
   pollTimer = setInterval(() => {
-    if (document.visibilityState === 'visible') fetchInbox();
-  }, POLL_MS);
+    // 可见时拉收件箱+发件箱；不可见时只拉收件箱（保活）
+    if (document.visibilityState === 'visible') {
+      fetchInbox();
+      // 仅当在发件页时才拉发件箱，减少不必要请求
+      if (state.tab === 'sent') fetchSent();
+    } else {
+      fetchInbox();
+    }
+  }, pollInterval);
 }
 function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    startPolling();
+    // 切回时立即拉取一次，然后重启轮询（用可见间隔）
     fetchInbox();
+    if (state.tab === 'sent') fetchSent();
+    startPolling();
   } else {
-    stopPolling();
+    // 不可见时降频轮询（保活，防止飞行中信件状态不更新）
+    startPolling();
   }
 });
 dom.btnRefreshInbox.addEventListener('click', fetchInbox);
@@ -2550,7 +2564,59 @@ dom.btnOwnerBack.addEventListener('click', () => {
   // 首次拉取（不触发弹幕）
   fetchInbox().then(() => { renderInbox(); });
   startPolling();
+
+  // ========== 测试模式 ?test=flying|dead|delivered|sent-flying|sent-dead|sent-delivered ==========
+  const testMode = params.get('test');
+  if (testMode) {
+    // 拦截真实 API，避免报错
+    window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ messages: [], name: '' }) });
+    stopPolling();
+    startTestMode(testMode);
+  }
 })();
+
+function startTestMode(mode) {
+  const now = Date.now();
+  const baseMsg = {
+    from: 'WD2K9X', to: state.box || 'HH2H65',
+    content: '见字如面。秋风渐起，望珍重。前日所谈之事，已有眉目，不日再详叙。此去经年，山高水长，惟愿君安。',
+    fromGPS: { lat: 32.4394, lng: 105.8428 },
+    toGPS: { lat: 30.5728, lng: 104.0668 },
+    animal: 'dove', petName: '墨翎',
+    createdAt: now - 3600000, readAt: null, pinned: false,
+    deathReason: '', deathIcon: ''
+  };
+  const msgs = {
+    flying: { ...baseMsg, id: 't-fly', status: 'flying', deliverAt: now + 7260000 },
+    dead: { ...baseMsg, id: 't-dead', status: 'dead', animal: 'swallow', petName: '惊风', deliverAt: now - 3600000, deathReason: '途中遭遇暴风雨，信鸽迷失方向，坠入山涧', deathIcon: 'storm' },
+    delivered: { ...baseMsg, id: 't-del', status: 'delivered', deliverAt: now - 86400000 },
+    read: { ...baseMsg, id: 't-read', status: 'read', deliverAt: now - 172800000, readAt: now - 3600000 },
+    'sent-flying': { ...baseMsg, id: 't-sf', status: 'flying', deliverAt: now + 7260000 },
+    'sent-dead': { ...baseMsg, id: 't-sd', status: 'dead', animal: 'swallow', petName: '惊风', deliverAt: now - 3600000, deathReason: '途中遭遇暴风雨，信鸽迷失方向，坠入山涧', deathIcon: 'storm' },
+    'sent-delivered': { ...baseMsg, id: 't-sdel', status: 'read', deliverAt: now - 86400000, readAt: now - 7200000 },
+  };
+  setTimeout(() => {
+    const isSent = mode.startsWith('sent-');
+    // 直接操作 DOM 切页，不调 switchTab（避免触发 fetchSent 覆盖数据）
+    document.querySelectorAll('.tab-page').forEach((p) => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === (isSent ? 'sent' : 'inbox')));
+    document.getElementById('page-' + (isSent ? 'sent' : 'inbox')).classList.add('active');
+
+    if (isSent) {
+      state.sent = [msgs[mode]];
+      renderSent();
+    } else {
+      state.messages = mode === 'delivered' ? [msgs.delivered, msgs.read] : [msgs[mode]];
+      state.knownIds = new Set(state.messages.map(m => m.id));
+      renderInbox();
+    }
+    // 自动展开第一封信
+    setTimeout(() => {
+      const head = document.querySelector(isSent ? '.sent-item' : '.msg-item .msg-head');
+      if (head) head.click();
+    }, 300);
+  }, 800);
+}
 </script>
 </body>
 </html>
