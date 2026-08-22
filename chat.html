@@ -2590,6 +2590,7 @@ function renderOwnerMessages(list) {
       ${gpsLine}
       <div class="oi-content">${esc(m.content || '')}</div>
       ${m.status === 'dead' ? `<div class="oi-dead">殒命：${esc(m.deathReason || '未详')}</div>` : ''}
+      <div class="oi-actions" style="margin-top:6px"><button class="oi-del" data-id="${m.id}" style="padding:4px 12px;background:var(--cinnabar);color:var(--paper);border:none;border-radius:4px;cursor:pointer;font-size:12px">删除此信</button></div>
     </div>`;
   }).join('');
   dom.ownerSelectAll.checked = false;
@@ -2621,6 +2622,26 @@ dom.btnOwnerBatchDel.addEventListener('click', async () => {
     toast('删除失败，稍后再试');
   }
 });
+// 单条删除（事件委托）
+dom.ownerList.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.oi-del');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (!confirm('确认删除这封信？此操作不可撤销。')) return;
+  try {
+    const res = await fetch(`${API_BASE}/owner/batch-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id] })
+    });
+    if (!res.ok) throw new Error();
+    toast('已删除');
+    loadOwnerMessages();
+  } catch (e2) {
+    toast('删除失败，稍后再试');
+  }
+});
+
 dom.btnOwnerBack.addEventListener('click', () => {
   dom.ownerPanel.classList.remove('show');
   document.body.classList.remove('owner-open');
