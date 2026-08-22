@@ -1327,10 +1327,10 @@ function loadLeaflet() {
   leafletPromise = new Promise((resolve, reject) => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    link.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
     document.head.appendChild(link);
     const s = document.createElement('script');
-    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
     s.onload = () => resolve(window.L);
     s.onerror = () => { leafletPromise = null; reject(new Error('leaflet')); };
     document.head.appendChild(s);
@@ -1389,9 +1389,10 @@ async function renderFlyingMap(container, msg) {
     touchZoom: false,
     dragging: false
   });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+    subdomains: '12',
     maxZoom: 17,
-    attribution: '© OpenStreetMap'
+    attribution: '© AutoNavi'
   }).addTo(map);
 
   const from = { lat: msg.fromGPS.lat, lng: msg.fromGPS.lng };
@@ -1459,7 +1460,7 @@ function destroyAllMaps() {
 function renderMiniMap(el, a, b, deliverAt, animalId) {
   const L = window.L;
   const map = L.map(el, { zoomControl: false, attributionControl: true, scrollWheelZoom: false, touchZoom: false, dragging: false });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '© OpenStreetMap' }).addTo(map);
+  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { subdomains:'12', maxZoom: 16, attribution: '© AutoNavi' }).addTo(map);
   const arc = arcPoints(a, b, 40);
   L.polyline(arc, { color: '#a88a3e', weight: 1.5, dashArray: '4 6', opacity: .8 }).addTo(map);
   L.circleMarker([a.lat, a.lng], { radius: 4, color: '#c0392b', weight: 2, fillColor: '#c0392b', fillOpacity: 1 }).addTo(map);
@@ -1595,7 +1596,7 @@ function buildInboxItem(m) {
         if (mapWrap.dataset.rendered) return;
         mapWrap.dataset.rendered = '1';
         if (window.L) renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null);
-        else loadLeaflet().then(() => renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null)).catch(() => {});
+        else loadLeaflet().then(() => renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null)).catch(() => { mapWrap.innerHTML = flyAnimHtml(m.animal, '信使途中，山河迢递'); });
       };
     } else {
       // 无发件方或收件方定位：以飞鸟动画替代地图
