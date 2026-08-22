@@ -555,7 +555,8 @@ async function handleMigrate(request, env) {
         const raw = await env.MESSAGES.get(`msg:${id}`);
         if (!raw) continue;
         const msg = JSON.parse(raw);
-        if (msg.status === 'flying' && msg.to === oldBox) {
+        // 跳过自己发给自己的信件（漏洞：新信箱发给旧信箱后迁移）
+        if (msg.status === 'flying' && msg.to === oldBox && msg.from !== newBox) {
           msg.to = newBox;
           await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
           await indexRemove(env, `idx:inbox:${oldBox}`, id);
@@ -587,7 +588,8 @@ async function handleMigrate(request, env) {
         const raw = await env.MESSAGES.get(`msg:${id}`);
         if (!raw) continue;
         const msg = JSON.parse(raw);
-        if (msg.status === 'flying' && msg.from === oldBox) {
+        // 跳过自己发给自己的信件（漏洞：新信箱发给旧信箱后迁移）
+        if (msg.status === 'flying' && msg.from === oldBox && msg.to !== newBox) {
           msg.from = newBox;
           await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
           await indexRemove(env, `idx:sent:${oldBox}`, id);
