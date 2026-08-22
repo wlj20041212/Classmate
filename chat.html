@@ -957,7 +957,7 @@ body.owner-open .tabbar{display:none}
 /* ---------- 常量与状态 ---------- */
 const API_BASE = 'https://letter.wanglejiang.top/chat/api';
 const LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 排除易混 0O1Il2Z5S8B
-const POLL_MS = 60000;  // 可见时轮询间隔（60秒）
+const POLL_MS = 30000;  // 可见时轮询间隔（30秒）
 
 const state = {
   box: '',
@@ -1437,14 +1437,27 @@ function loadLeaflet() {
     link.rel = 'stylesheet';
     link.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
     document.head.appendChild(link);
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-    s.onload = () => resolve(window.L);
-    s.onerror = () => { leafletPromise = null; reject(new Error('leaflet')); };
-    document.head.appendChild(s);
+    // 多 CDN 备用：jsdelivr 失败则尝试 unpkg
+    const tryLoad = (src, onFail) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve(window.L);
+      s.onerror = onFail;
+      document.head.appendChild(s);
+    };
+    tryLoad('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js', () => {
+      // jsdelivr 失败，尝试 unpkg
+      tryLoad('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', () => {
+        leafletPromise = null;
+        reject(new Error('leaflet'));
+      });
+    });
   });
   return leafletPromise;
 }
+
+// 预加载 Leaflet（页面加载后异步预取，不阻塞首屏）
+setTimeout(() => { loadLeaflet().catch(() => {}); }, 2000);
 
 /* 简笔鸽子 SVG（朝向右侧） */
 const PIGEON_SVG = `<svg viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
@@ -1500,7 +1513,9 @@ async function renderFlyingMap(container, msg) {
   L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
     subdomains: '12',
     maxZoom: 17,
-    attribution: '© AutoNavi'
+    attribution: '© AutoNavi',
+    crossOrigin: true,
+    keepBuffer: 4
   }).addTo(map);
 
   const from = { lat: msg.fromGPS.lat, lng: msg.fromGPS.lng };
@@ -1519,7 +1534,7 @@ async function renderFlyingMap(container, msg) {
   const bounds = L.latLngBounds(arc);
   map.fitBounds(bounds.pad(0.3));
   // 确保容器尺寸正确（防止在隐藏父级中初始化导致一团灰）
-  setTimeout(() => { if (container.isConnected) map.invalidateSize(); }, 120);
+  setTimeout(() => { if (container.isConnected) map.invalidateSize(); }, 50);
 
   const record = { map, pigeon, msg, lastPx: null };
   state.flyingMaps.set(key, record);
@@ -1568,7 +1583,7 @@ function destroyAllMaps() {
 function renderMiniMap(el, a, b, deliverAt, animalId) {
   const L = window.L;
   const map = L.map(el, { zoomControl: false, attributionControl: true, scrollWheelZoom: false, touchZoom: false, dragging: false });
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { subdomains:'12', maxZoom: 16, attribution: '© AutoNavi' }).addTo(map);
+  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { subdomains:'12', maxZoom: 16, attribution: '© AutoNavi', crossOrigin: true, keepBuffer: 4 }).addTo(map);
   const arc = arcPoints(a, b, 40);
   L.polyline(arc, { color: '#a88a3e', weight: 1.5, dashArray: '4 6', opacity: .8 }).addTo(map);
   L.circleMarker([a.lat, a.lng], { radius: 4, color: '#c0392b', weight: 2, fillColor: '#c0392b', fillOpacity: 1 }).addTo(map);
@@ -1578,7 +1593,7 @@ function renderMiniMap(el, a, b, deliverAt, animalId) {
   const icon = L.divIcon({ className: '', html: `<div class="pigeon-ico">${svg}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] });
   L.marker(a, { icon, interactive: false }).addTo(map);
   // 展开后容器尺寸才正确，需刷新（延时确保 display:block 生效）
-  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 200);
+  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 50);
 }
 
 /* ============================================================
