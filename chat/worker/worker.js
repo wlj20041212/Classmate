@@ -93,6 +93,10 @@ export default {
     if (path === '/api/read' && method === 'POST') return handleRead(request, env);
     if (path === '/api/recall' && method === 'POST') return handleRecall(request, env);
     if (path === '/api/redeem' && method === 'POST') return handleRedeem(request, env);
+    if (path === '/api/delete-inbox' && method === 'POST') return handleDeleteInbox(request, env);
+    if (path === '/api/delete-sent' && method === 'POST') return handleDeleteSent(request, env);
+    if (path === '/api/pin' && method === 'POST') return handlePin(request, env);
+    if (path === '/api/migrate' && method === 'POST') return handleMigrate(request, env);
 
     // owner 接口
     if (path === '/api/owner-login' && method === 'POST') return handleOwnerLogin(request, env);
@@ -180,6 +184,8 @@ async function handleInbox(request, env, url) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
     if (!raw) continue;
     let msg = JSON.parse(raw);
+    // 跳过已被收件人删除的
+    if (msg.inboxDeletedBy === box) continue;
     // 记录收件人定位（首次）
     if (lat && lng && !msg.toGPS && msg.to === box) {
       msg.toGPS = { lat: parseFloat(lat), lng: parseFloat(lng) };
@@ -187,6 +193,8 @@ async function handleInbox(request, env, url) {
     }
     // 按需计算状态
     msg = await computeStatus(msg, env);
+    // 映射置顶字段
+    msg.pinned = !!msg.pinnedByReceiver;
     messages.push(msg);
   }
 
@@ -206,7 +214,11 @@ async function handleSent(request, env, url) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
     if (!raw) continue;
     let msg = JSON.parse(raw);
+    // 跳过已被发件人删除的
+    if (msg.sentDeletedBy === from) continue;
     msg = await computeStatus(msg, env);
+    // 映射置顶字段
+    msg.pinned = !!msg.pinnedBySender;
     messages.push(msg);
   }
 
@@ -295,12 +307,7 @@ async function handleOwnerLogin(request, env) {
 
 // ============ Owner 查看全部信件 ============
 async function handleOwnerMessages(request, env, url) {
-  // 验证 token
-  const token = getToken(request);
-  const payload = await verifyToken(token, env.OWNER_SECRET_KEY);
-  if (!payload || payload.role !== 'owner') {
-    return json({ error: '未授权' }, 401);
-  }
+  // 无需 token，与 AI 聊天记录、圣诞树照片一致
 
   // 可选筛选
   const filterBox = url.searchParams.get('box');
@@ -337,6 +344,102 @@ async function handleOwnerMessages(request, env, url) {
 
   messages.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return json({ messages, total: messages.length });
+}
+
+// ============ 删除收件（仅删除收件人视图，发件人仍可见） ============
+async function handleDeleteInbox(request, env) {
+  try {
+    const { id, box } = await request.json();
+    if (!id || !box) return json({ error: '参数缺失' }, 400);
+    const raw = await env.MESSAGES.get(`msg:${id}`);
+    if (!raw) return json({ ok: true });
+    const msg = JSON.parse(raw);
+    if (msg.to === box) {
+      msg.inboxDeletedBy = box;
+      await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+    }
+    return json({ ok: true });
+  } catch (e) {
+    return json({ error: '删除失败' }, 500);
+  }
+}
+
+// ============ 删除发件（仅删除发件人视图，收件人仍可见） ============
+async function handleDeleteSent(request, env) {
+  try {
+    const { id, from } = await request.json();
+    if (!id || !from) return json({ error: '参数缺失' }, 400);
+    const raw = await env.MESSAGES.get(`msg:${id}`);
+    if (!raw) return json({ ok: true });
+    const msg = JSON.parse(raw);
+    if (msg.from === from) {
+      msg.sentDeletedBy = from;
+      await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+    }
+    return json({ ok: true });
+  } catch (e) {
+    return json({ error: '删除失败' }, 500);
+  }
+}
+
+// ============ 置顶/取消置顶 ============
+async function handlePin(request, env) {
+  try {
+    const { id, box, side, pinned } = await request.json();
+    if (!id || !box) return json({ error: '参数缺失' }, 400);
+    const raw = await env.MESSAGES.get(`msg:${id}`);
+    if (!raw) return json({ ok: true });
+    const msg = JSON.parse(raw);
+    // side: inbox / sent，对应不同方的置顶标记
+    const pinField = side === 'sent' ? 'pinnedBySender' : 'pinnedByReceiver';
+    msg[pinField] = !!pinned;
+    await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+    return json({ ok: true });
+  } catch (e) {
+    return json({ error: '操作失败' }, 500);
+  }
+}
+
+// ============ 信箱迁移：飞行中信件转移到新信箱 ============
+async function handleMigrate(request, env) {
+  try {
+    const { oldBox, newBox } = await request.json();
+    if (!oldBox || !newBox) return json({ error: '参数缺失' }, 400);
+    let migrated = 0;
+    // 迁移收件箱飞行中信件
+    const inboxList = await env.MESSAGES.list({ prefix: `inbox:${oldBox}:` });
+    for (const key of inboxList.keys) {
+      const id = key.name.split(':')[2];
+      const raw = await env.MESSAGES.get(`msg:${id}`);
+      if (!raw) continue;
+      const msg = JSON.parse(raw);
+      if (msg.status === 'flying' && msg.to === oldBox) {
+        msg.to = newBox;
+        await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+        // 删旧索引，加新索引
+        await env.MESSAGES.delete(`inbox:${oldBox}:${id}`);
+        await env.MESSAGES.put(`inbox:${newBox}:${id}`, '1');
+        migrated++;
+      }
+    }
+    // 迁移发件箱飞行中信件
+    const sentList = await env.MESSAGES.list({ prefix: `sent:${oldBox}:` });
+    for (const key of sentList.keys) {
+      const id = key.name.split(':')[2];
+      const raw = await env.MESSAGES.get(`msg:${id}`);
+      if (!raw) continue;
+      const msg = JSON.parse(raw);
+      if (msg.status === 'flying' && msg.from === oldBox) {
+        msg.from = newBox;
+        await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
+        await env.MESSAGES.delete(`sent:${oldBox}:${id}`);
+        await env.MESSAGES.put(`sent:${newBox}:${id}`, '1');
+      }
+    }
+    return json({ ok: true, migrated });
+  } catch (e) {
+    return json({ error: '迁移失败' }, 500);
+  }
 }
 
 /**

@@ -2490,19 +2490,6 @@ class AuthView {
                 console.log('[AuthView] 登录成功');
                 showToast('登录成功，欢迎进入 Owner 模式！', 'success');
                 
-                // 用密码调飞鸽传书 Worker 获取 owner token（供信件查看使用）
-                try {
-                    const r = await fetch('https://letter.wanglejiang.top/chat/api/owner-login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ password })
-                    });
-                    if (r.ok) {
-                        const d = await r.json();
-                        if (d.token) sessionStorage.setItem('pigeon_owner_token', d.token);
-                    }
-                } catch (e) { /* 飞鸽传书 token 获取失败不影响主站登录 */ }
-                
                 // 关闭对话框
                 document.body.removeChild(dialog);
                 
