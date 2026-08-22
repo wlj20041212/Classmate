@@ -9,6 +9,14 @@
  *   - 若 now >= deliverAt：willDie=true → 状态改 dead；willDie=false → 状态改 delivered
  *   - 即使用户关了网页，下次打开查询时 Worker 自动更新状态
  *   - 前端轮询30秒刷新，位置会随时间变化
+ *
+ * KV 存储结构（v2，用 get 替代 list，避免 list 额度限制）：
+ *   msg:{id}          → 信件 JSON
+ *   idx:inbox:{box}   → [id1, id2, ...]  收件箱信件ID数组
+ *   idx:sent:{box}    → [id1, id2, ...]  发件箱信件ID数组
+ *   idx:all           → [id1, id2, ...]  全部信件ID数组（owner用）
+ *   name:{box}        → 信箱名号
+ *   （兼容旧数据：inbox:{box}:{id} / sent:{box}:{id} 仍存在但不再 list）
  */
 
 // ============ 配置 ============
@@ -69,6 +77,38 @@ async function verifyToken(token, key) {
 function getToken(req) {
   const auth = req.headers.get('Authorization') || '';
   return auth.replace('Bearer ', '');
+}
+
+// ============ 索引读写工具（用 get/set 替代 list） ============
+// 读取索引数组
+async function getIndex(env, key) {
+  const raw = await env.MESSAGES.get(key);
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch (e) { return []; }
+}
+
+// 写入索引数组
+async function setIndex(env, key, arr) {
+  await env.MESSAGES.put(key, JSON.stringify(arr));
+}
+
+// 往索引数组追加一个 id（去重）
+async function indexPush(env, key, id) {
+  const arr = await getIndex(env, key);
+  if (!arr.includes(id)) {
+    arr.push(id);
+    await setIndex(env, key, arr);
+  }
+}
+
+// 从索引数组移除一个 id
+async function indexRemove(env, key, id) {
+  const arr = await getIndex(env, key);
+  const i = arr.indexOf(id);
+  if (i >= 0) {
+    arr.splice(i, 1);
+    await setIndex(env, key, arr);
+  }
 }
 
 // ============ 主入口 ============
@@ -142,8 +182,13 @@ async function handleSend(request, env) {
       readAt: null,
     };
 
-    // 存入 KV：收件人收件箱 + 发件人发件箱
+    // 存入 KV：信件本身 + 索引（用 get/set 替代 list）
     await env.MESSAGES.put(`msg:${msg.id}`, JSON.stringify(msg));
+    await indexPush(env, `idx:inbox:${to}`, msg.id);
+    await indexPush(env, `idx:sent:${from}`, msg.id);
+    await indexPush(env, 'idx:all', msg.id);
+
+    // 兼容旧数据格式（同时写旧 key，但不再 list 读取）
     await env.MESSAGES.put(`inbox:${to}:${msg.id}`, msg.id);
     await env.MESSAGES.put(`sent:${from}:${msg.id}`, msg.id);
 
@@ -181,10 +226,10 @@ async function handleInbox(request, env, url) {
   const lat = url.searchParams.get('lat');
   const lng = url.searchParams.get('lng');
 
-  const listRes = await env.MESSAGES.list({ prefix: `inbox:${box}:` });
+  // 用 get 读取索引（替代 list）
+  const ids = await getIndex(env, `idx:inbox:${box}`);
   const messages = [];
-  for (const key of listRes.keys) {
-    const id = key.name.split(':')[2];
+  for (const id of ids) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
     if (!raw) continue;
     let msg = JSON.parse(raw);
@@ -211,10 +256,10 @@ async function handleSent(request, env, url) {
   const from = url.searchParams.get('from');
   if (!from) return json({ error: '缺少信箱号' }, 400);
 
-  const listRes = await env.MESSAGES.list({ prefix: `sent:${from}:` });
+  // 用 get 读取索引（替代 list）
+  const ids = await getIndex(env, `idx:sent:${from}`);
   const messages = [];
-  for (const key of listRes.keys) {
-    const id = key.name.split(':')[2];
+  for (const id of ids) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
     if (!raw) continue;
     let msg = JSON.parse(raw);
@@ -317,11 +362,11 @@ async function handleOwnerMessages(request, env, url) {
   const filterBox = url.searchParams.get('box');
   const filterStatus = url.searchParams.get('status');
 
-  // 列出所有消息
-  const listRes = await env.MESSAGES.list({ prefix: 'msg:' });
+  // 用 get 读取全局索引（替代 list）
+  const ids = await getIndex(env, 'idx:all');
   const messages = [];
-  for (const key of listRes.keys) {
-    const raw = await env.MESSAGES.get(key.name);
+  for (const id of ids) {
+    const raw = await env.MESSAGES.get(`msg:${id}`);
     if (!raw) continue;
     let msg = JSON.parse(raw);
     msg = await computeStatus(msg, env);
@@ -394,6 +439,16 @@ async function handleOwnerBatchDelete(request, env) {
     let deleted = 0;
     for (const id of ids) {
       if (!id) continue;
+      // 读取信件，获取 from/to 用于清理索引
+      const raw = await env.MESSAGES.get(`msg:${id}`);
+      if (raw) {
+        const msg = JSON.parse(raw);
+        // 从索引中移除
+        if (msg.from) await indexRemove(env, `idx:sent:${msg.from}`, id);
+        if (msg.to) await indexRemove(env, `idx:inbox:${msg.to}`, id);
+        await indexRemove(env, 'idx:all', id);
+      }
+      // 删除信件本身
       await env.MESSAGES.delete(`msg:${id}`);
       deleted++;
     }
@@ -427,34 +482,35 @@ async function handleMigrate(request, env) {
     const { oldBox, newBox } = await request.json();
     if (!oldBox || !newBox) return json({ error: '参数缺失' }, 400);
     let migrated = 0;
-    // 迁移收件箱飞行中信件
-    const inboxList = await env.MESSAGES.list({ prefix: `inbox:${oldBox}:` });
-    for (const key of inboxList.keys) {
-      const id = key.name.split(':')[2];
+
+    // 用 get 读取旧信箱索引（替代 list）
+    const inboxIds = await getIndex(env, `idx:inbox:${oldBox}`);
+    for (const id of inboxIds) {
       const raw = await env.MESSAGES.get(`msg:${id}`);
       if (!raw) continue;
       const msg = JSON.parse(raw);
       if (msg.status === 'flying' && msg.to === oldBox) {
         msg.to = newBox;
         await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
-        // 删旧索引，加新索引
-        await env.MESSAGES.delete(`inbox:${oldBox}:${id}`);
-        await env.MESSAGES.put(`inbox:${newBox}:${id}`, '1');
+        // 更新索引：从旧信箱移除，加到新信箱
+        await indexRemove(env, `idx:inbox:${oldBox}`, id);
+        await indexPush(env, `idx:inbox:${newBox}`, id);
         migrated++;
       }
     }
-    // 迁移发件箱飞行中信件
-    const sentList = await env.MESSAGES.list({ prefix: `sent:${oldBox}:` });
-    for (const key of sentList.keys) {
-      const id = key.name.split(':')[2];
+
+    // 用 get 读取旧发件箱索引（替代 list）
+    const sentIds = await getIndex(env, `idx:sent:${oldBox}`);
+    for (const id of sentIds) {
       const raw = await env.MESSAGES.get(`msg:${id}`);
       if (!raw) continue;
       const msg = JSON.parse(raw);
       if (msg.status === 'flying' && msg.from === oldBox) {
         msg.from = newBox;
         await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
-        await env.MESSAGES.delete(`sent:${oldBox}:${id}`);
-        await env.MESSAGES.put(`sent:${newBox}:${id}`, '1');
+        // 更新索引
+        await indexRemove(env, `idx:sent:${oldBox}`, id);
+        await indexPush(env, `idx:sent:${newBox}`, id);
       }
     }
     return json({ ok: true, migrated });
