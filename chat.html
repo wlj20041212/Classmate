@@ -228,6 +228,42 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 }
 .airborne-head .t{font-family:var(--kai);font-size:18px;font-weight:700;letter-spacing:.18em}
 .airborne-head .s{font-size:12px;color:var(--ink-faint);margin-top:3px;letter-spacing:.06em}
+
+/* 信使飞行中动画（无GPS时替代地图） */
+.fly-anim-box{
+  margin:8px 0;border-radius:10px;overflow:hidden;height:170px;
+  border:1px solid var(--paper-line);background:linear-gradient(180deg,#e8e0d0 0%,#d8cdb8 100%);
+  position:relative;display:flex;align-items:center;justify-content:center;
+}
+.fly-anim-box .sky-cloud{
+  position:absolute;width:60px;height:24px;background:rgba(255,255,255,.4);border-radius:50%;
+  filter:blur(4px);animation:cloudDrift 8s linear infinite;
+}
+.fly-anim-box .sky-cloud:nth-child(2){animation-delay:-3s;width:40px;top:30px}
+.fly-anim-box .sky-cloud:nth-child(3){animation-delay:-5s;width:50px;top:60px}
+@keyframes cloudDrift{
+  0%{left:-60px}100%{left:calc(100% + 60px)}
+}
+.fly-anim-box .fly-bird{
+  position:relative;z-index:2;width:50px;height:50px;
+  animation:birdFly 2s ease-in-out infinite;
+}
+.fly-anim-box .fly-bird svg{width:100%;height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+@keyframes birdFly{
+  0%,100%{transform:translateY(-8px) rotate(-3deg)}
+  50%{transform:translateY(8px) rotate(3deg)}
+}
+.fly-anim-box .fly-label{
+  position:absolute;bottom:10px;left:0;right:0;text-align:center;
+  font-size:12px;color:var(--ink-soft);font-family:var(--kai);letter-spacing:.1em;
+  z-index:3;
+}
+.fly-anim-box .fly-wing-flap{
+  animation:wingFlap .3s ease-in-out infinite alternate;transform-origin:center;
+}
+@keyframes wingFlap{
+  0%{transform:scaleY(1)}100%{transform:scaleY(.7)}
+}
 .airborne-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:10px}
 .airborne-meta span:last-child{color:var(--cinnabar);font-weight:600}
 .airborne-map{height:150px;border-radius:6px;overflow:hidden;border:1px solid var(--paper-line);position:relative;background:var(--paper-deep)}
@@ -860,6 +896,8 @@ body.owner-open .tabbar{display:none}
       <option value="recalled">已召回</option>
     </select>
     <button id="btnOwnerSearch">查询</button>
+    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-soft);cursor:pointer"><input type="checkbox" id="ownerSelectAll"> 全选</label>
+    <button id="btnOwnerBatchDel" style="background:var(--cinnabar);color:var(--paper);border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px">批量删除</button>
     <span id="ownerTotal" style="color:var(--ink-faint);font-size:12px;align-self:center"></span>
   </div>
   <div class="owner-list" id="ownerList"></div>
@@ -923,6 +961,7 @@ const dom = {
   ownerPanel: $('ownerPanel'), btnOwnerRefresh: $('btnOwnerRefresh'), btnOwnerBack: $('btnOwnerBack'),
   ownerFilterBox: $('ownerFilterBox'), ownerFilterStatus: $('ownerFilterStatus'),
   btnOwnerSearch: $('btnOwnerSearch'), ownerList: $('ownerList'), ownerTotal: $('ownerTotal'),
+  ownerSelectAll: $('ownerSelectAll'), btnOwnerBatchDel: $('btnOwnerBatchDel'),
 };
 
 /* ---------- 信箱号 ---------- */
@@ -1266,6 +1305,18 @@ function renderArcPlaceholder(el) {
   </svg>`;
 }
 
+/* 无GPS时的飞行动画（收件方或发件方无定位，以飞鸟动画替代地图） */
+function flyAnimHtml(animalId, label) {
+  const svg = animalId ? animalSvg(animalId) : PIGEON_SVG;
+  return `<div class="fly-anim-box">
+    <div class="sky-cloud"></div>
+    <div class="sky-cloud"></div>
+    <div class="sky-cloud"></div>
+    <div class="fly-bird">${svg}</div>
+    <div class="fly-label">${esc(label || '信使途中，山河迢递')}</div>
+  </div>`;
+}
+
 /* ============================================================
    Leaflet 懒加载与地图绘制
    ============================================================ */
@@ -1547,10 +1598,8 @@ function buildInboxItem(m) {
         else loadLeaflet().then(() => renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null)).catch(() => {});
       };
     } else {
-      const noMap = document.createElement('div');
-      noMap.style.cssText = 'margin:8px 0;padding:20px;text-align:center;color:var(--ink-faint);font-size:12px;background:var(--paper-deep);border-radius:8px;border:1px solid var(--paper-line)';
-      noMap.textContent = '未取得定位，信鸽只以倒计时飞抵';
-      detail.appendChild(noMap);
+      // 无发件方或收件方定位：以飞鸟动画替代地图
+      detail.insertAdjacentHTML('beforeend', flyAnimHtml(m.animal, '信使途中，山河迢递'));
     }
   }
   if (m.status === 'dead') {
@@ -2518,25 +2567,60 @@ async function loadOwnerMessages() {
 function renderOwnerMessages(list) {
   if (!list.length) {
     dom.ownerList.innerHTML = '<div style="text-align:center;color:var(--ink-faint);padding:20px">暂无信件</div>';
+    dom.ownerSelectAll.checked = false;
     return;
   }
   const statusMap = { flying:'飞行中', delivered:'已送达', read:'已读', dead:'殒命', recalled:'已召回' };
+  const fmtGPS = (g) => g ? `${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}` : '';
   dom.ownerList.innerHTML = list.map(m => {
     const ani = ANIMALS[m.animal] || ANIMALS.dove;
+    // 定位行：双方都有显示两个，只有发件方显示一个，都没有不显示
+    let gpsLine = '';
+    if (m.fromGPS && m.toGPS) {
+      gpsLine = `<div class="oi-gps" style="font-size:11px;color:var(--ink-faint);margin:2px 0">定位 · 发：${fmtGPS(m.fromGPS)} ｜ 收：${fmtGPS(m.toGPS)}</div>`;
+    } else if (m.fromGPS) {
+      gpsLine = `<div class="oi-gps" style="font-size:11px;color:var(--ink-faint);margin:2px 0">定位 · 发：${fmtGPS(m.fromGPS)}</div>`;
+    }
     return `<div class="owner-item">
       <div class="oi-head">
-        <span class="oi-from">${m.from || '匿名'} → ${m.to}</span>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="owner-chk" data-id="${m.id}"><span class="oi-from">${m.from || '匿名'} → ${m.to}</span></label>
         <span class="oi-status ${m.status}">${statusMap[m.status] || m.status}</span>
       </div>
       <div class="oi-meta">信使：${ani.name}${m.petName ? '·' + m.petName : ''} · 发送：${m.createdAt} · 预达：${m.deliverAt}${m.readAt ? ' · 已读：' + m.readAt : ''}</div>
+      ${gpsLine}
       <div class="oi-content">${esc(m.content || '')}</div>
       ${m.status === 'dead' ? `<div class="oi-dead">殒命：${esc(m.deathReason || '未详')}</div>` : ''}
     </div>`;
   }).join('');
+  dom.ownerSelectAll.checked = false;
 }
 
 dom.btnOwnerRefresh.addEventListener('click', loadOwnerMessages);
 dom.btnOwnerSearch.addEventListener('click', loadOwnerMessages);
+
+// 全选/取消全选
+dom.ownerSelectAll.addEventListener('change', () => {
+  document.querySelectorAll('.owner-chk').forEach(c => { c.checked = dom.ownerSelectAll.checked; });
+});
+
+// 批量删除
+dom.btnOwnerBatchDel.addEventListener('click', async () => {
+  const ids = [...document.querySelectorAll('.owner-chk:checked')].map(c => c.dataset.id);
+  if (!ids.length) { toast('请先勾选信件'); return; }
+  if (!confirm('确认删除选中的 ' + ids.length + ' 封信件？此操作不可撤销。')) return;
+  try {
+    const res = await fetch(`${API_BASE}/owner/batch-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!res.ok) throw new Error();
+    toast('已删除 ' + ids.length + ' 封');
+    loadOwnerMessages();
+  } catch (e) {
+    toast('删除失败，稍后再试');
+  }
+});
 dom.btnOwnerBack.addEventListener('click', () => {
   dom.ownerPanel.classList.remove('show');
   document.body.classList.remove('owner-open');

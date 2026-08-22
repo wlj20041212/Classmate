@@ -103,6 +103,7 @@ export default {
     // owner 接口
     if (path === '/api/owner-login' && method === 'POST') return handleOwnerLogin(request, env);
     if (path === '/api/owner/messages' && method === 'GET') return handleOwnerMessages(request, env, url);
+    if (path === '/api/owner/batch-delete' && method === 'POST') return handleOwnerBatchDelete(request, env);
 
     return json({ error: 'Not Found' }, 404);
   },
@@ -379,6 +380,23 @@ async function handleDeleteSent(request, env) {
       await env.MESSAGES.put(`msg:${id}`, JSON.stringify(msg));
     }
     return json({ ok: true });
+  } catch (e) {
+    return json({ error: '删除失败' }, 500);
+  }
+}
+
+// ============ Owner 批量删除信件（真正删除，不可恢复） ============
+async function handleOwnerBatchDelete(request, env) {
+  try {
+    const { ids } = await request.json();
+    if (!Array.isArray(ids) || !ids.length) return json({ error: '参数缺失' }, 400);
+    let deleted = 0;
+    for (const id of ids) {
+      if (!id) continue;
+      await env.MESSAGES.delete(`msg:${id}`);
+      deleted++;
+    }
+    return json({ ok: true, deleted });
   } catch (e) {
     return json({ error: '删除失败' }, 500);
   }
