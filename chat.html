@@ -1637,13 +1637,12 @@ function buildInboxItem(m) {
   btnPin.textContent = m.pinned ? '取消置顶' : '置顶';
   btnPin.addEventListener('click', (e) => { e.stopPropagation(); togglePinInbox(m.id); });
   act.appendChild(btnPin);
-  if (m.status !== 'flying') {
-    const btnDel = document.createElement('button');
-    btnDel.className = 'btn-recalled';
-    btnDel.textContent = '删除';
-    btnDel.addEventListener('click', (e) => { e.stopPropagation(); deleteInboxMsg(m.id); });
-    act.appendChild(btnDel);
-  }
+  // 收件方对所有状态均可删除（含飞行中）
+  const btnDel = document.createElement('button');
+  btnDel.className = 'btn-recalled';
+  btnDel.textContent = '删除';
+  btnDel.addEventListener('click', (e) => { e.stopPropagation(); deleteInboxMsg(m.id); });
+  act.appendChild(btnDel);
   detail.appendChild(act);
   item.appendChild(detail);
 
@@ -1693,8 +1692,6 @@ function statusText(s) {
 
 /* 收件箱：删除（仅自己页面，调 Worker 删 inbox 索引） */
 async function deleteInboxMsg(id) {
-  const m = state.messages.find((mm) => mm.id === id);
-  if (m && m.status === 'flying') { toast('信使飞行中，不可删除'); return; }
   if (!confirm('删除后仅在你的收件箱消失，发件人仍可见。确认？')) return;
   try {
     await fetch(`${API_BASE}/delete-inbox`, {
@@ -1817,10 +1814,8 @@ function renderSent() {
           else loadLeaflet().then(() => renderMiniMap(mapWrap, m.fromGPS, m.toGPS, m.deliverAt, m.animal || null)).catch(() => {});
         };
       } else {
-        const noMap = document.createElement('div');
-        noMap.style.cssText = 'margin:8px 0;padding:20px;text-align:center;color:var(--ink-faint);font-size:12px;background:var(--paper-deep);border-radius:8px;border:1px solid var(--paper-line)';
-        noMap.textContent = '未取得定位，信鸽只以倒计时飞抵';
-        detail.appendChild(noMap);
+        // 无发件方或收件方定位：以飞鸟动画替代地图
+        detail.insertAdjacentHTML('beforeend', flyAnimHtml(m.animal, '信使途中，山河迢递'));
       }
       // 召回按钮
       const act = document.createElement('div');
