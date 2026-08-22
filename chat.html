@@ -1504,11 +1504,11 @@ async function renderFlyingMap(container, msg) {
   const key = msg.id + '-' + (state.sentinel++);
 
   const map = L.map(container, {
-    zoomControl: false,
+    zoomControl: true,
     attributionControl: true,
-    scrollWheelZoom: false,
-    touchZoom: false,
-    dragging: false
+    scrollWheelZoom: true,
+    touchZoom: true,
+    dragging: true
   });
   L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
     subdomains: '12',
@@ -1582,7 +1582,7 @@ function destroyAllMaps() {
 /* 起飞卡片缩略地图（简单示意） */
 function renderMiniMap(el, a, b, deliverAt, animalId) {
   const L = window.L;
-  const map = L.map(el, { zoomControl: false, attributionControl: true, scrollWheelZoom: false, touchZoom: false, dragging: false });
+  const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: true, touchZoom: true, dragging: true });
   L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { subdomains:'12', maxZoom: 16, attribution: '© AutoNavi', crossOrigin: true, keepBuffer: 4 }).addTo(map);
   const arc = arcPoints(a, b, 40);
   L.polyline(arc, { color: '#a88a3e', weight: 1.5, dashArray: '4 6', opacity: .8 }).addTo(map);
