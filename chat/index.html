@@ -681,8 +681,7 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
       <span class="refresh" style="font-size:12px;color:var(--ink-faint)">不同信使，生死有命</span>
     </div>
     <p style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin:4px 0 8px;letter-spacing:.04em">
-      <b style="color:var(--ink-soft)">普通</b>·常有陨落 ／ <b style="color:#a88a3e">史诗</b>·罕有陨落 ／ <b style="color:var(--cinnabar)">传说</b>·永陨不坠<br>
-      <span style="color:var(--ink-faint);font-size:12px">珍稀信使速度更快、殒命更少。观景七息可得新使，或持兑换码换之。</span>
+      <b>普通</b>·常有陨落 ／ <b style="color:#3b82f6">稀有</b>·偶有陨落 ／ <b style="color:#a88a3e">史诗</b>·罕有陨落 ／ <b style="color:var(--cinnabar)">传说</b>·永陨不坠
     </p>
     <div class="animal-grid" id="animalGrid"></div>
     <div class="animal-actions">
@@ -993,7 +992,7 @@ async function sendMessage() {
     const res = await fetch(`${API_BASE}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, content, flyHours, fromGPS, animal: animal.id, petName, willDie, deathReason })
+      body: JSON.stringify({ from: state.box, to, content, flyHours, fromGPS, animal: animal.id, petName, willDie, deathReason })
     });
     if (!res.ok) throw new Error(res.status);
     const data = await res.json().catch(() => ({}));
@@ -1207,7 +1206,10 @@ function renderMiniMap(el, a, b, deliverAt, animalId) {
 async function fetchInbox() {
   if (!state.box) return;
   try {
-    const res = await fetch(`${API_BASE}/inbox?box=${encodeURIComponent(state.box)}`);
+    // 带上收件人定位（如果有的话）
+    let url = `${API_BASE}/inbox?box=${encodeURIComponent(state.box)}`;
+    if (lastGPS) url += `&lat=${lastGPS.lat}&lng=${lastGPS.lng}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     const list = Array.isArray(data) ? data : (data.messages || data.list || []);
@@ -1855,10 +1857,7 @@ function showGainToast(id){
   if(state.tab === 'animal') renderAnimals();
 }
 
-/* ---------- 兑换码 ---------- */
-const REDEEM_CODES = {
-  'WZWWLJ': 'all'   // 兑换全部动物
-};
+/* ---------- 兑换码（后端校验） ---------- */
 dom.btnRedeemOpen.addEventListener('click', () => {
   dom.redeemInput.value = '';
   dom.redeemModal.classList.add('show');
@@ -1866,19 +1865,28 @@ dom.btnRedeemOpen.addEventListener('click', () => {
 });
 dom.btnRedeemCancel.addEventListener('click', () => dom.redeemModal.classList.remove('show'));
 dom.redeemModal.addEventListener('click', (e) => { if(e.target === dom.redeemModal) dom.redeemModal.classList.remove('show'); });
-dom.btnRedeemConfirm.addEventListener('click', () => {
+dom.btnRedeemConfirm.addEventListener('click', async () => {
   const code = dom.redeemInput.value.trim().toUpperCase();
   if(!code){ toast('请输入兑换码'); return; }
-  const val = REDEEM_CODES[code];
-  if(!val){ toast('兑换码有误', true); return; }
-  dom.redeemModal.classList.remove('show');
-  if(val === 'all'){
-    ANI_ORDER.forEach(id => addAnimal(id, 1));
-    toast('已换得全部信使', true);
-    if(state.tab === 'animal') renderAnimals();
-  } else {
-    addAnimal(val, 1);
-    showGainToast(val);
+  try {
+    const res = await fetch(`${API_BASE}/redeem`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast(data.error || '兑换码有误', true); return; }
+    dom.redeemModal.classList.remove('show');
+    if(data.reward === 'all'){
+      ANI_ORDER.forEach(id => addAnimal(id, 1));
+      toast('已换得全部信使', true);
+      if(state.tab === 'animal') renderAnimals();
+    } else {
+      addAnimal(data.reward, 1);
+      showGainToast(data.reward);
+    }
+  } catch(e){
+    toast('飞鸽疲惫，稍后再试');
   }
 });
 

@@ -1,0 +1,25 @@
+# 飞鸽传书 Cloudflare Worker 配置
+# 部署步骤：
+#   1. npm install -g wrangler          （如未安装）
+#   2. wrangler login                   （登录 Cloudflare）
+#   3. wrangler kv:namespace create MESSAGES  （创建消息KV）
+#   4. wrangler kv:namespace create CODES     （创建兑换码KV）
+#   5. 把返回的 id 填到下方 kv_namespaces.id
+#   6. wrangler secret put OWNER_PASSWORD    （设置owner密码）
+#   7. wrangler secret put OWNER_SECRET_KEY  （设置JWT签名密钥，随便一串字符）
+#   8. wrangler deploy
+#   9. 把 Worker URL 填到 chat/index.html 的 API_BASE
+
+name = "pigeon-chat"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+# 消息存储 KV
+[[kv_namespaces]]
+binding = "MESSAGES"
+id = "在这里填入你的消息KV命名空间ID"
+
+# 兑换码 KV
+[[kv_namespaces]]
+binding = "CODES"
+id = "在这里填入你的兑换码KV命名空间ID"
