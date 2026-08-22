@@ -889,7 +889,8 @@ const state = {
   animals: {},         // 动物库存 {id:count}
   currentAnimal: 'dove', // 当前选中信使
   names: {},            // 自定义名号 {id:name}
-  renameTarget: null
+  renameTarget: null,
+  boxNames: {},         // 信箱名号缓存 {box:name}
 };
 
 /* ---------- DOM ---------- */
@@ -1472,17 +1473,27 @@ function buildInboxItem(m) {
 
   const head = document.createElement('div');
   head.className = 'msg-head';
+  // 发件人显示：有信箱号则查名号（掩码显示最后一位），无则显示"无名氏"
+  const fromBox = m.from || '';
+  const fromNameId = 'fromname-' + m.id;
   head.innerHTML = `
     <span class="msg-status-dot"></span>
     <div>
-      <div class="msg-from">${esc(m.from || '无名氏')}${m.animal ? '<span class="pet-name">' + esc((ANIMALS[m.animal]||ANIMALS.dove).name) + (m.petName ? '·' + esc(m.petName) : '') + '</span>' : ''}</div>
-      <div class="msg-who">${m.from ? '来自信箱 ' + esc(m.from) : ''}</div>
+      <div class="msg-from"><span id="${fromNameId}">${esc(fromBox || '无名氏')}</span>${m.animal ? '<span class="pet-name">' + esc((ANIMALS[m.animal]||ANIMALS.dove).name) + (m.petName ? '·' + esc(m.petName) : '') + '</span>' : ''}</div>
+      <div class="msg-who">${fromBox ? '来自信箱 ' + esc(fromBox) : ''}</div>
     </div>
     <div class="msg-right">
       <span class="msg-badge ${m.status}">${statusText(m.status)}</span>
       <span class="msg-time">${m.createdAt ? formatShort(m.createdAt) : ''}</span>
     </div>`;
   item.appendChild(head);
+  // 异步查询发件人名号（掩码显示最后一位）
+  if (fromBox) {
+    fetchBoxNameMasked(fromBox).then((masked) => {
+      const el = document.getElementById(fromNameId);
+      if (el && masked) el.textContent = masked;
+    });
+  }
 
   // 详情展开区（点击头部展开/收起）
   const detail = document.createElement('div');
@@ -2351,6 +2362,27 @@ async function lookupBoxName(box) {
       dom.toBoxNameHint.style.color = 'var(--ink-faint)';
     }
   } catch(e) {}
+}
+
+// 查询信箱名号并返回掩码（带缓存，用于收件箱显示发件人名号）
+async function fetchBoxNameMasked(box) {
+  if (state.boxNames[box]) {
+    const n = state.boxNames[box];
+    return n.length <= 1 ? n : '*'.repeat(n.length - 1) + n.slice(-1);
+  }
+  try {
+    const res = await fetch(`${API_BASE}/getname?box=${box}`);
+    if (!res.ok) return '';
+    const data = await res.json();
+    if (data.name) {
+      state.boxNames[box] = data.name;
+      const n = data.name;
+      return n.length <= 1 ? n : '*'.repeat(n.length - 1) + n.slice(-1);
+    } else {
+      state.boxNames[box] = '';
+      return '';
+    }
+  } catch(e) { return ''; }
 }
 
 /* ---------- 顶栏：信箱取名 ---------- */
