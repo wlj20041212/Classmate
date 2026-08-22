@@ -114,14 +114,15 @@ async function handleSend(request, env) {
   try {
     const body = await request.json();
     const { to, content, flyHours, fromGPS, animal, petName, willDie, deathReason } = body;
+    const from = body.from || '';
 
     if (!to || !/^[A-HJ-NP-Z2-9]{6}$/.test(to)) return json({ error: '收件人信箱号无效' }, 400);
+    if (to === from) return json({ error: '收件人不能是自己' }, 400);
     if (!content) return json({ error: '内容不能为空' }, 400);
 
     const now = Date.now();
     const hours = parseFloat(flyHours) || 24;
     const deliverAt = now + hours * 3600000;
-    const from = body.from || '';
 
     const msg = {
       id: genId(),
