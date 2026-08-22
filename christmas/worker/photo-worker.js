@@ -100,26 +100,16 @@ export default {
         // ---------- JSON 列表 ----------
         if (request.method === 'GET' && url.pathname === '/api/list') {
             if (!checkPwd(url)) return json({ success: false, message: '口令错误' }, 403);
-            try {
-                const list = await env.PHOTOS.list();
-                const items = [];
-                for (const k of (list.keys || [])) {
-                    try {
-                        const meta = k.metadata || {};
-                        items.push({
-                            key: k.name,
-                            invite_code: meta.invite_code || '',
-                            type: meta.type || 'image/jpeg',
-                            size: meta.size || 0,
-                            time: meta.timestamp || 0,
-                            time_str: meta.timestamp ? new Date(meta.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '',
-                        });
-                    } catch (e) { /* 跳过异常条目 */ }
-                }
-                return json({ success: true, count: items.length, items });
-            } catch (err) {
-                return json({ success: false, message: 'KV list 失败: ' + (err && err.message ? err.message : String(err)), error: String(err) }, 500);
-            }
+            const list = await env.PHOTOS.list();
+            const items = list.keys.map(k => ({
+                key: k.name,
+                invite_code: k.metadata?.invite_code || '',
+                type: k.metadata?.type || 'image/jpeg',
+                size: k.metadata?.size || 0,
+                time: k.metadata?.timestamp || 0,
+                time_str: k.metadata?.timestamp ? new Date(k.metadata.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '',
+            }));
+            return json({ success: true, count: items.length, items });
         }
 
         // ---------- 删除照片 ----------
@@ -141,42 +131,31 @@ export default {
                     { headers: { 'Content-Type': 'text/html; charset=utf-8', ...CORS } }
                 );
             }
-            let keys = [];
-            let listErr = '';
-            try {
-                const list = await env.PHOTOS.list();
-                keys = list.keys || [];
-            } catch (err) {
-                listErr = (err && err.message ? err.message : String(err));
-            }
+            const list = await env.PHOTOS.list();
             const pwdParam = VIEW_PASSWORD ? `?pwd=${encodeURIComponent(VIEW_PASSWORD)}` : '';
-            const cells = keys.map(k => {
-                try {
-                    const meta = k.metadata || {};
-                    const timeStr = meta.timestamp ? new Date(meta.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '';
-                    const sizeKB = meta.size ? (meta.size / 1024).toFixed(1) + ' KB' : '';
-                    const del = `/api/delete${pwdParam}&key=${encodeURIComponent(k.name)}`;
-                    return (
-                        `<div style="display:inline-block;margin:10px;vertical-align:top;text-align:center;` +
-                        `background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.15)">` +
-                        `<img src="/view?key=${encodeURIComponent(k.name)}" style="max-width:240px;display:block"/>` +
-                        `<div style="padding:8px;font-size:12px;color:#333">` +
-                        `<div>${timeStr}</div>` +
-                        `<div style="color:#888">邀请码: ${meta.invite_code || '-'} | ${sizeKB}</div>` +
-                        `<a href="${del}" style="color:#e74c3c;text-decoration:none" ` +
-                        `onclick="return confirm('删除这张照片?')">删除</a>` +
-                        `</div></div>`
-                    );
-                } catch (e) { return ''; }
+            const cells = list.keys.map(k => {
+                const meta = k.metadata || {};
+                const timeStr = meta.timestamp ? new Date(meta.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '';
+                const sizeKB = meta.size ? (meta.size / 1024).toFixed(1) + ' KB' : '';
+                const del = `/api/delete${pwdParam}&key=${encodeURIComponent(k.name)}`;
+                return (
+                    `<div style="display:inline-block;margin:10px;vertical-align:top;text-align:center;` +
+                    `background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.15)">` +
+                    `<img src="/view?key=${encodeURIComponent(k.name)}" style="max-width:240px;display:block"/>` +
+                    `<div style="padding:8px;font-size:12px;color:#333">` +
+                    `<div>${timeStr}</div>` +
+                    `<div style="color:#888">邀请码: ${meta.invite_code || '-'} | ${sizeKB}</div>` +
+                    `<a href="${del}" style="color:#e74c3c;text-decoration:none" ` +
+                    `onclick="return confirm('删除这张照片?')">删除</a>` +
+                    `</div></div>`
+                );
             }).join('');
-            const errBanner = listErr ? `<div style="background:#fee;color:#c00;padding:10px;margin:10px;border-radius:6px">⚠️ KV读取异常: ${listErr}</div>` : '';
             const html = (
                 `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">` +
                 `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-                `<title>🎄 照片墙 (${keys.length})</title></head>` +
+                `<title>🎄 照片墙 (${list.keys.length})</title></head>` +
                 `<body style="margin:0;padding:20px;background:#f0f2f5;font-family:sans-serif">` +
-                `<h2 style="text-align:center">🎄 照片墙 — 共 ${keys.length} 张</h2>` +
-                errBanner +
+                `<h2 style="text-align:center">🎄 照片墙 — 共 ${list.keys.length} 张</h2>` +
                 `<div style="text-align:center">${cells || '<p style="color:#888">还没有照片</p>'}</div>` +
                 `</body></html>`
             );
