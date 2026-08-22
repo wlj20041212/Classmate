@@ -227,23 +227,14 @@ async function handleInbox(request, env, url) {
   const lat = url.searchParams.get('lat');
   const lng = url.searchParams.get('lng');
 
-  // 用 get 读取索引（替代 list）
-  let ids = await getIndex(env, `idx:inbox:${box}`);
-  // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
-  if (ids.length === 0) {
-    const oldList = await env.MESSAGES.list({ prefix: `inbox:${box}:` });
-    if (oldList.keys.length > 0) {
-      ids = oldList.keys.map((k) => k.name.split(':')[2]);
-      // 把旧信件ID补进新索引（一次性迁移）
-      await setIndex(env, `idx:inbox:${box}`, ids);
-      // 同时补进 idx:all（owner用）
-      const allIds = await getIndex(env, 'idx:all');
-      for (const id of ids) {
-        if (!allIds.includes(id)) allIds.push(id);
-      }
-      await setIndex(env, 'idx:all', allIds);
-    }
-  }
+  // 直接 list 读取（实时性好，避免索引最终一致性问题）
+  const list = await env.MESSAGES.list({ prefix: `inbox:${box}:` });
+  let ids = list.keys.map((k) => k.name.split(':')[2]);
+  // 合并索引中的id（双保险）
+  const idxIds = await getIndex(env, `idx:inbox:${box}`);
+  const idSet = new Set(ids);
+  idxIds.forEach((id) => idSet.add(id));
+  ids = Array.from(idSet);
   const messages = [];
   for (const id of ids) {
     const raw = await env.MESSAGES.get(`msg:${id}`);
@@ -272,21 +263,14 @@ async function handleSent(request, env, url) {
   const from = url.searchParams.get('from');
   if (!from) return json({ error: '缺少信箱号' }, 400);
 
-  // 用 get 读取索引（替代 list）
-  let ids = await getIndex(env, `idx:sent:${from}`);
-  // 兼容旧数据：若新索引为空，回退 list 旧 key 一次并迁移
-  if (ids.length === 0) {
-    const oldList = await env.MESSAGES.list({ prefix: `sent:${from}:` });
-    if (oldList.keys.length > 0) {
-      ids = oldList.keys.map((k) => k.name.split(':')[2]);
-      await setIndex(env, `idx:sent:${from}`, ids);
-      const allIds = await getIndex(env, 'idx:all');
-      for (const id of ids) {
-        if (!allIds.includes(id)) allIds.push(id);
-      }
-      await setIndex(env, 'idx:all', allIds);
-    }
-  }
+  // 直接 list 读取（实时性好，避免索引最终一致性问题）
+  const list = await env.MESSAGES.list({ prefix: `sent:${from}:` });
+  let ids = list.keys.map((k) => k.name.split(':')[2]);
+  // 合并索引中的id（双保险）
+  const idxIds = await getIndex(env, `idx:sent:${from}`);
+  const idSet = new Set(ids);
+  idxIds.forEach((id) => idSet.add(id));
+  ids = Array.from(idSet);
   const messages = [];
   for (const id of ids) {
     const raw = await env.MESSAGES.get(`msg:${id}`);

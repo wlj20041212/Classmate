@@ -322,8 +322,7 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 .msg-badge.flying{color:var(--gold)}
 .msg-badge.delivered{color:var(--cinnabar)}
 .msg-time{font-size:11px;color:var(--ink-faint);margin-top:3px;display:block;letter-spacing:.03em}
-.msg-body{display:none;border-top:1px dashed var(--paper-line);padding:16px 16px 20px;position:relative}
-.msg-item.open .msg-body{display:block;animation:fadeUp .3s ease-out}
+.msg-body{display:block;border-top:1px dashed var(--paper-line);padding:16px 16px 20px;position:relative;animation:fadeUp .3s ease-out}
 .msg-body .paper{
   position:relative;padding:22px 18px 30px;background:var(--paper-deep);
   border:1px solid var(--paper-line);border-radius:4px;box-shadow:inset 0 0 40px rgba(74,60,40,.06);
@@ -1614,10 +1613,8 @@ function renderMiniMap(el, a, b, deliverAt, animalId) {
   const svg = animalId ? animalSvg(animalId) : PIGEON_SVG;
   const icon = L.divIcon({ className: '', html: `<div class="pigeon-ico">${svg}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] });
   L.marker(a, { icon, interactive: false }).addTo(map);
-  // 展开后容器尺寸才正确，需多次刷新确保 display:block 生效
+  // 展开后容器尺寸才正确，需刷新（延时确保 display:block 生效）
   setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 50);
-  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 200);
-  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 500);
 }
 
 /* ============================================================
