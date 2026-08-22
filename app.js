@@ -3933,6 +3933,15 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = { showToast };
 }
 
+// ============== 飞鸽传书信件查看 (Owner 模式 - 跳转飞鸽传书 owner 面板) ==============
+(function() {
+    const viewBtn = document.getElementById('viewPigeonBtn');
+    if (!viewBtn) return;
+    viewBtn.addEventListener('click', () => {
+        location.href = '/chat.html?owner=1';
+    });
+})();
+
 // ============== AI 聊天记录查看器 (Owner 模式 - 读取 Cloudflare KV 所有用户) ==============
 
 (function() {
