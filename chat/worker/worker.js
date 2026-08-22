@@ -97,6 +97,8 @@ export default {
     if (path === '/api/delete-sent' && method === 'POST') return handleDeleteSent(request, env);
     if (path === '/api/pin' && method === 'POST') return handlePin(request, env);
     if (path === '/api/migrate' && method === 'POST') return handleMigrate(request, env);
+    if (path === '/api/getname' && method === 'GET') return handleGetName(request, env, url);
+    if (path === '/api/setname' && method === 'POST') return handleSetName(request, env);
 
     // owner 接口
     if (path === '/api/owner-login' && method === 'POST') return handleOwnerLogin(request, env);
@@ -439,6 +441,31 @@ async function handleMigrate(request, env) {
     return json({ ok: true, migrated });
   } catch (e) {
     return json({ error: '迁移失败' }, 500);
+  }
+}
+
+// ============ 信箱取名 ============
+async function handleGetName(request, env, url) {
+  const box = (url.searchParams.get('box') || '').toUpperCase();
+  if (!box || !/^[A-HJ-NP-Z2-9]{6}$/.test(box)) return json({ error: '信箱号无效' }, 400);
+  const raw = await env.MESSAGES.get(`name:${box}`);
+  return json({ box, name: raw || '' });
+}
+
+async function handleSetName(request, env) {
+  try {
+    const { box, name } = await request.json();
+    const b = (box || '').toUpperCase();
+    if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
+    const n = (name || '').trim().slice(0, 8);
+    if (!n) {
+      await env.MESSAGES.delete(`name:${b}`);
+      return json({ ok: true, name: '' });
+    }
+    await env.MESSAGES.put(`name:${b}`, n);
+    return json({ ok: true, name: n });
+  } catch (e) {
+    return json({ error: '保存失败' }, 500);
   }
 }
 

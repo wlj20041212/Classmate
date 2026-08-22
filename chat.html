@@ -383,8 +383,8 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 .btn-danger:active{transform:scale(.97)}
 
 /* ==================== 地图水墨滤镜 ==================== */
-.leaflet-container{font-family:var(--serif)}
-.msg-map .leaflet-tile-pane,.airborne-map .leaflet-tile-pane{filter:grayscale(1) sepia(.16) brightness(1.06) contrast(.9)}
+.leaflet-container{font-family:var(--serif);background:#e8e0d0}
+.msg-map .leaflet-tile-pane,.airborne-map .leaflet-tile-pane{filter:grayscale(.35) sepia(.12) brightness(1.04) contrast(.95)}
 .leaflet-control-attribution{font-size:9px !important;background:rgba(245,240,230,.6) !important;color:var(--ink-faint) !important}
 .pigeon-ico{width:44px;height:44px;margin-left:-22px;margin-top:-22px;transition:transform .1s linear;will-change:transform}
 .pigeon-ico svg{width:100%;height:100%;filter:drop-shadow(0 3px 4px rgba(42,37,34,.35))}
@@ -578,10 +578,11 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 
 /* Owner 面板 */
 .owner-panel{
-  position:fixed;inset:0;z-index:500;background:var(--paper);
+  position:fixed;inset:0;z-index:1000;background:var(--paper);
   overflow-y:auto;display:none;
 }
 .owner-panel.show{display:block}
+body.owner-open .tabbar{display:none}
 .owner-head{
   position:sticky;top:0;background:var(--ink);color:var(--paper);
   padding:12px 16px;display:flex;align-items:center;gap:12px;
@@ -633,9 +634,6 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
       <button class="btn-icon" id="btnCopy" title="复制信箱号" aria-label="复制信箱号">
         <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
       </button>
-      <button class="btn-icon" id="btnRenew" title="重置信箱号" aria-label="重置信箱号">
-        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/></svg>
-      </button>
     </div>
     <div class="box-meta">
       <span class="hint">将此号告知友人，便可收信</span>
@@ -652,9 +650,17 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
     <h2 class="form-title">修书一封</h2>
     <div class="field">
       <label class="field-label" for="toBox"><b>*</b>收件人信箱号</label>
-      <div class="input-box" style="display:flex;gap:8px">
+      <div class="input-box" style="display:flex;gap:8px;align-items:center">
         <input id="toBox" type="text" maxlength="6" placeholder="六位信箱号" autocomplete="off" autocapitalize="characters" spellcheck="false" style="flex:1">
         <button type="button" class="btn-redeem" id="btnPasteBox" style="flex:0 0 auto;padding:10px 14px;font-size:12px;letter-spacing:.1em">粘贴</button>
+      </div>
+      <div class="box-name-hint" id="toBoxNameHint" style="font-size:12px;color:var(--ink-faint);margin-top:4px;min-height:16px"></div>
+    </div>
+    <div class="field">
+      <label class="field-label" for="myNameInput">你的名号（可选，对方可见）</label>
+      <div class="input-box" style="display:flex;gap:8px;align-items:center">
+        <input id="myNameInput" type="text" maxlength="8" placeholder="如：王乐江" autocomplete="off" style="flex:1">
+        <button type="button" class="btn-redeem" id="btnSaveName" style="flex:0 0 auto;padding:10px 14px;font-size:12px;letter-spacing:.1em">保存</button>
       </div>
     </div>
     <div class="field">
@@ -681,20 +687,15 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
     <div class="gps-note" id="gpsNote"><span class="dot"></span><span id="gpsNoteText">发送时将请求定位，以便信鸽飞抵有迹可循</span></div>
     <button class="btn-send" id="btnSend">放飞信使</button>
 
-    <!-- 起飞卡片 -->
+    <!-- 发送成功后提示去"我发的"查看 -->
     <div class="airborne-card" id="airborneCard">
       <div class="airborne-head">
         <div class="stamp">已起飞</div>
         <div>
-          <div class="t">鸽子已起飞</div>
-          <div class="s">信鸽正展翅，穿越山河而来</div>
+          <div class="t">信使已展翅</div>
+          <div class="s">前往「我发的」查看飞行轨迹</div>
         </div>
       </div>
-      <div class="airborne-meta">
-        <span id="airborneTo">致：------</span>
-        <span id="airborneDeliver">预计送达 --</span>
-      </div>
-      <div class="airborne-map" id="airborneMap"></div>
     </div>
   </section>
 
@@ -784,6 +785,26 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
       <button class="btn-cancel" id="btnResetCancel">再想想</button>
       <button class="btn-danger" id="btnResetConfirm">确认重置</button>
     </div>
+    <div style="margin-top:10px;text-align:center;font-size:12px">
+      <a href="javascript:void(0)" id="btnOpenMigrate" style="color:var(--ink-soft);text-decoration:underline">已有旧号？点此迁移信件</a>
+    </div>
+  </div>
+</div>
+
+<!-- 迁移旧信箱信件 -->
+<div class="modal-mask" id="migrateModal">
+  <div class="modal">
+    <h3>导入旧信箱</h3>
+    <p style="font-size:13px;line-height:1.8;color:var(--ink-soft)">
+      输入旧信箱号，将旧号中<b>飞行中</b>的信件迁移到当前信箱<br>
+      （<b style="color:var(--cinnabar)" id="migrateCurBox"></b>）。<br>
+      已送达/已读信件无法迁移。
+    </p>
+    <input type="text" id="migrateOldInput" placeholder="六位旧信箱号" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" style="width:100%;padding:10px;border:1px solid var(--paper-line);border-radius:4px;font-size:15px;letter-spacing:.15em;text-transform:uppercase;box-sizing:border-box;margin:6px 0">
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btnMigrateCancel">取消</button>
+      <button class="btn-danger" id="btnMigrateConfirm">迁移</button>
+    </div>
   </div>
 </div>
 
@@ -866,16 +887,20 @@ const state = {
 /* ---------- DOM ---------- */
 const $ = (id) => document.getElementById(id);
 const dom = {
-  boxNo: $('boxNo'), btnCopy: $('btnCopy'), btnRenew: $('btnRenew'), btnReset: $('btnReset'), btnShare: $('btnShare'),
-  toBox: $('toBox'), msgContent: $('msgContent'), charCount: $('charCount'),
+  boxNo: $('boxNo'), btnCopy: $('btnCopy'), btnReset: $('btnReset'), btnShare: $('btnShare'),
+  toBox: $('toBox'), toBoxNameHint: $('toBoxNameHint'), myNameInput: $('myNameInput'), btnSaveName: $('btnSaveName'),
+  msgContent: $('msgContent'), charCount: $('charCount'),
   durationGroup: $('durationGroup'), durationCustom: $('durationCustom'), customTime: $('customTime'),
   gpsNote: $('gpsNote'), gpsNoteText: $('gpsNoteText'), btnSend: $('btnSend'),
-  airborneCard: $('airborneCard'), airborneTo: $('airborneTo'), airborneDeliver: $('airborneDeliver'), airborneMap: $('airborneMap'),
+  airborneCard: $('airborneCard'),
   inboxList: $('inboxList'), inboxEmpty: $('inboxEmpty'), btnRefreshInbox: $('btnRefreshInbox'),
   sentList: $('sentList'), sentEmpty: $('sentEmpty'), btnRefreshSent: $('btnRefreshSent'),
   dotInbox: $('dotInbox'), danmakuLayer: $('danmakuLayer'),
   toastWrap: $('toastWrap'), toast: $('toast'),
   resetModal: $('resetModal'), btnResetCancel: $('btnResetCancel'), btnResetConfirm: $('btnResetConfirm'),
+  btnOpenMigrate: $('btnOpenMigrate'),
+  migrateModal: $('migrateModal'), migrateOldInput: $('migrateOldInput'), migrateCurBox: $('migrateCurBox'),
+  btnMigrateCancel: $('btnMigrateCancel'), btnMigrateConfirm: $('btnMigrateConfirm'),
   animalGrid: $('animalGrid'), btnAd: $('btnAd'), btnRedeemOpen: $('btnRedeemOpen'),
   redeemModal: $('redeemModal'), redeemInput: $('redeemInput'),
   btnRedeemCancel: $('btnRedeemCancel'), btnRedeemConfirm: $('btnRedeemConfirm'),
@@ -963,14 +988,6 @@ dom.btnCopy.addEventListener('click', async () => {
     toast('已抄录', true);
   }
 });
-dom.btnRenew.addEventListener('click', () => {
-  const b = genBox();
-  localStorage.setItem('pigeon_box', b);
-  state.box = b; dom.boxNo.textContent = b;
-  state.messages = []; state.sent = []; state.knownIds.clear();
-  renderInbox(); renderSent(); destroyAllMaps();
-  toast('新信箱号已生成', true);
-});
 dom.btnReset.addEventListener('click', () => {
   $('resetOldBox').textContent = state.box;
   dom.resetModal.classList.add('show');
@@ -994,6 +1011,43 @@ dom.btnResetConfirm.addEventListener('click', async () => {
   state.messages = []; state.sent = []; state.knownIds.clear();
   renderInbox(); renderSent(); destroyAllMaps();
   toast('已重置，飞行中信件已迁移到新信箱', true);
+});
+
+/* ---------- 导入旧信箱 ---------- */
+dom.btnOpenMigrate.addEventListener('click', () => {
+  dom.resetModal.classList.remove('show');
+  dom.migrateCurBox.textContent = state.box;
+  dom.migrateOldInput.value = '';
+  dom.migrateModal.classList.add('show');
+  setTimeout(() => dom.migrateOldInput.focus(), 100);
+});
+dom.btnMigrateCancel.addEventListener('click', () => { dom.migrateModal.classList.remove('show'); });
+dom.migrateModal.addEventListener('click', (e) => { if (e.target === dom.migrateModal) dom.migrateModal.classList.remove('show'); });
+dom.migrateOldInput.addEventListener('input', () => {
+  dom.migrateOldInput.value = dom.migrateOldInput.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 6);
+});
+dom.btnMigrateConfirm.addEventListener('click', async () => {
+  const oldBox = dom.migrateOldInput.value.trim().toUpperCase();
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(oldBox)) { toast('请输入六位旧信箱号'); return; }
+  if (oldBox === state.box) { toast('旧号与当前信箱相同'); return; }
+  dom.btnMigrateConfirm.disabled = true;
+  dom.btnMigrateConfirm.textContent = '迁移中…';
+  try {
+    const res = await fetch(`${API_BASE}/migrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldBox, newBox: state.box })
+    });
+    const data = await res.json().catch(() => ({}));
+    dom.migrateModal.classList.remove('show');
+    toast('已迁移 ' + (data.migrated || 0) + ' 封飞行中信件', true);
+    fetchInbox(); fetchSent();
+  } catch (e) {
+    toast('迁移失败，稍后再试');
+  } finally {
+    dom.btnMigrateConfirm.disabled = false;
+    dom.btnMigrateConfirm.textContent = '迁移';
+  }
 });
 
 /* ---------- 写信：字数 ---------- */
@@ -1166,25 +1220,15 @@ async function sendMessage() {
   }
 }
 
-/* 起飞卡片 + 轨迹缩略图 */
+/* 起飞提示卡片 */
 async function showAirborne(to, deliverAt, fromGPS, animal, petName) {
   dom.airborneCard.classList.add('show');
-  const display = animal.name + (petName ? '·' + petName : '');
-  dom.airborneTo.innerHTML = '致：' + to + (animal ? '<span class="pet-name">' + esc(display) + '</span>' : '');
-  dom.airborneDeliver.textContent = '预计送达 ' + formatFull(deliverAt);
-  const el = dom.airborneMap;
-  el.innerHTML = '';
-  if (fromGPS && window.L) {
-    renderMiniMap(el, fromGPS, { lat: fromGPS.lat + 0.35, lng: fromGPS.lng + 0.55 }, deliverAt, animal ? animal.id : null);
-  } else if (fromGPS) {
-    try {
-      const L = await loadLeaflet();
-      renderMiniMap(el, fromGPS, { lat: fromGPS.lat + 0.35, lng: fromGPS.lng + 0.55 }, deliverAt, animal ? animal.id : null);
-    } catch (e) { renderArcPlaceholder(el); }
-  } else {
-    renderArcPlaceholder(el);
-  }
   dom.airborneCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // 3秒后自动跳转到"我发的"
+  setTimeout(() => {
+    switchTab('sent');
+    dom.airborneCard.classList.remove('show');
+  }, 2000);
 }
 function renderArcPlaceholder(el) {
   el.innerHTML = `<svg viewBox="0 0 320 120" style="width:100%;height:100%">
@@ -1289,6 +1333,8 @@ async function renderFlyingMap(container, msg) {
 
   const bounds = L.latLngBounds(arc);
   map.fitBounds(bounds.pad(0.3));
+  // 确保容器尺寸正确（防止在隐藏父级中初始化导致一团灰）
+  setTimeout(() => { if (container.isConnected) map.invalidateSize(); }, 120);
 
   const record = { map, pigeon, msg, lastPx: null };
   state.flyingMaps.set(key, record);
@@ -1346,6 +1392,8 @@ function renderMiniMap(el, a, b, deliverAt, animalId) {
   const svg = animalId ? animalSvg(animalId) : PIGEON_SVG;
   const icon = L.divIcon({ className: '', html: `<div class="pigeon-ico">${svg}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] });
   L.marker(a, { icon, interactive: false }).addTo(map);
+  // 展开后容器尺寸才正确，需刷新
+  setTimeout(() => { if (el.isConnected) map.invalidateSize(); }, 120);
 }
 
 /* ============================================================
@@ -1469,7 +1517,7 @@ function buildInboxItem(m) {
     body.innerHTML = `<div class="dead-note">${deathSceneSvg(m.deathIcon)}<span>信使「${esc(ani.name)}${m.petName ? '·' + esc(m.petName) : ''}」中途殒命，${esc(m.deathReason || '书信散落山河，未能送达')}。</span></div>`;
     item.appendChild(body);
   }
-  // 操作按钮：删除 + 置顶
+  // 操作按钮：删除 + 置顶（飞行中不可删除）
   const act = document.createElement('div');
   act.className = 'msg-actions';
   act.style.cssText = 'display:flex;gap:8px;padding:4px 12px 8px';
@@ -1480,15 +1528,17 @@ function buildInboxItem(m) {
     e.stopPropagation();
     togglePinInbox(m.id);
   });
-  const btnDel = document.createElement('button');
-  btnDel.className = 'btn-recalled';
-  btnDel.textContent = '删除';
-  btnDel.addEventListener('click', (e) => {
-    e.stopPropagation();
-    deleteInboxMsg(m.id);
-  });
   act.appendChild(btnPin);
-  act.appendChild(btnDel);
+  if (m.status !== 'flying') {
+    const btnDel = document.createElement('button');
+    btnDel.className = 'btn-recalled';
+    btnDel.textContent = '删除';
+    btnDel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteInboxMsg(m.id);
+    });
+    act.appendChild(btnDel);
+  }
   item.appendChild(act);
   // 点击：已送达/已读 → 展开 + 标记已读
   head.addEventListener('click', () => {
@@ -1532,6 +1582,8 @@ function statusText(s) {
 
 /* 收件箱：删除（仅自己页面，调 Worker 删 inbox 索引） */
 async function deleteInboxMsg(id) {
+  const m = state.messages.find((mm) => mm.id === id);
+  if (m && m.status === 'flying') { toast('信使飞行中，不可删除'); return; }
   if (!confirm('删除后仅在你的收件箱消失，发件人仍可见。确认？')) return;
   try {
     await fetch(`${API_BASE}/delete-inbox`, {
@@ -1697,27 +1749,29 @@ function renderSent() {
       info.textContent = '送达于 ' + formatFull(m.deliverAt) + (m.readAt ? ' · 已展阅 ' + formatShort(m.readAt) : ' · 未读');
       detail.appendChild(info);
     }
-    // 操作按钮：删除 + 置顶（发送成功后均可操作）
-    const actBox = document.createElement('div');
-    actBox.className = 'msg-actions';
-    actBox.style.cssText = 'display:flex;gap:8px;padding:4px 0';
-    const btnPin = document.createElement('button');
-    btnPin.className = 'btn-recalled';
-    btnPin.textContent = m.pinned ? '取消置顶' : '置顶';
-    btnPin.addEventListener('click', (e) => {
-      e.stopPropagation();
-      togglePinSent(m.id);
-    });
-    const btnDel = document.createElement('button');
-    btnDel.className = 'btn-recalled';
-    btnDel.textContent = '删除';
-    btnDel.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteSentMsg(m.id);
-    });
-    actBox.appendChild(btnPin);
-    actBox.appendChild(btnDel);
-    detail.appendChild(actBox);
+    // 操作按钮：删除 + 置顶（飞行中仅可召回，不可删除/置顶）
+    if (st !== 'flying') {
+      const actBox = document.createElement('div');
+      actBox.className = 'msg-actions';
+      actBox.style.cssText = 'display:flex;gap:8px;padding:4px 0';
+      const btnPin = document.createElement('button');
+      btnPin.className = 'btn-recalled';
+      btnPin.textContent = m.pinned ? '取消置顶' : '置顶';
+      btnPin.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePinSent(m.id);
+      });
+      const btnDel = document.createElement('button');
+      btnDel.className = 'btn-recalled';
+      btnDel.textContent = '删除';
+      btnDel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteSentMsg(m.id);
+      });
+      actBox.appendChild(btnPin);
+      actBox.appendChild(btnDel);
+      detail.appendChild(actBox);
+    }
 
     item.appendChild(detail);
     // 点击头部展开/收起
@@ -1732,6 +1786,8 @@ function renderSent() {
 
 /* 我发的信：删除（仅自己页面） */
 async function deleteSentMsg(id) {
+  const m = state.sent.find((mm) => mm.id === id);
+  if (m && m.status === 'flying') { toast('信使飞行中，不可删除'); return; }
   if (!confirm('删除后仅在你的发件箱消失，收件人仍可见。确认？')) return;
   try {
     await fetch(`${API_BASE}/delete-sent`, {
@@ -2222,23 +2278,92 @@ dom.btnRedeemConfirm.addEventListener('click', async () => {
   }
 });
 
-/* ---------- 粘贴收件人信箱号 ---------- */
+/* ---------- 粘贴收件人信箱号（手机友好） ---------- */
 dom.btnPasteBox.addEventListener('click', async () => {
+  // 直接读剪贴板（HTTPS + 用户点击下，多数手机浏览器支持）
+  let text = '';
   try {
-    const text = await navigator.clipboard.readText();
-    if(!text){ toast('剪贴板为空'); return; }
-    // 从"飞鸽传书信箱XXXXXX"或纯6位码中提取
-    const m = text.match(/[A-HJ-NP-Z2-9]{6}/i);
-    if(m){
-      dom.toBox.value = m[0].toUpperCase();
-      toast('已填入信箱号', true);
-    } else {
-      toast('未识别到信箱号');
-    }
-  } catch(e){
-    toast('请手动输入信箱号');
+    text = await navigator.clipboard.readText();
+  } catch(e) {
+    // 剪贴板 API 不可用（如微信内置浏览器），聚焦输入框让用户长按粘贴
+    dom.toBox.focus();
+    toast('请长按输入框粘贴信箱号');
+    return;
+  }
+  if(!text){ toast('剪贴板为空，请长按输入框粘贴'); return; }
+  // 从"飞鸽传书信箱XXXXXX"或纯6位码中提取
+  const m = text.match(/[A-HJ-NP-Z2-9]{6}/i);
+  if(m){
+    dom.toBox.value = m[0].toUpperCase();
+    toast('已填入信箱号', true);
+    lookupBoxName(m[0].toUpperCase());
+  } else {
+    toast('未识别到信箱号');
   }
 });
+
+/* ---------- 信箱号取名/查询 ---------- */
+// 输入收件人信箱号时：格式化 + 查询对方名号
+dom.toBox.addEventListener('input', () => {
+  const v = dom.toBox.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 6);
+  dom.toBox.value = v;
+  if (/^[A-HJ-NP-Z2-9]{6}$/.test(v)) {
+    lookupBoxName(v);
+  } else {
+    dom.toBoxNameHint.textContent = '';
+  }
+});
+
+// 查询对方信箱名号
+async function lookupBoxName(box) {
+  try {
+    const res = await fetch(`${API_BASE}/getname?box=${box}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.name) {
+      // 掩码显示：如"王乐江"→"**江"，"江"→"江"
+      const n = data.name;
+      const masked = n.length <= 1 ? n : '*'.repeat(n.length - 1) + n.slice(-1);
+      dom.toBoxNameHint.textContent = '对方名号：' + masked;
+      dom.toBoxNameHint.style.color = 'var(--cinnabar)';
+    } else {
+      dom.toBoxNameHint.textContent = '对方尚未取名';
+      dom.toBoxNameHint.style.color = 'var(--ink-faint)';
+    }
+  } catch(e) {}
+}
+
+// 保存自己的名号
+dom.btnSaveName.addEventListener('click', async () => {
+  const name = dom.myNameInput.value.trim();
+  if (!name) { toast('请输入名号'); return; }
+  try {
+    const res = await fetch(`${API_BASE}/setname`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ box: state.box, name })
+    });
+    if (!res.ok) throw new Error();
+    localStorage.setItem('pigeon_name', name);
+    toast('名号已保存', true);
+  } catch(e) {
+    toast('保存失败，稍后再试');
+  }
+});
+
+// 初始化时加载自己的名号
+function loadMyName() {
+  const saved = localStorage.getItem('pigeon_name');
+  if (saved) dom.myNameInput.value = saved;
+  // 同步到 Worker
+  if (saved) {
+    fetch(`${API_BASE}/setname`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ box: state.box, name: saved })
+    }).catch(() => {});
+  }
+}
 
 /* ---------- 信箱号分享 ---------- */
 dom.btnShare.addEventListener('click', async () => {
@@ -2266,6 +2391,7 @@ const ownerState = { loaded: false };
 
 function openOwnerPanel() {
   dom.ownerPanel.classList.add('show');
+  document.body.classList.add('owner-open');
   if (!ownerState.loaded) {
     ownerState.loaded = true;
     loadOwnerMessages();
@@ -2317,6 +2443,7 @@ dom.btnOwnerRefresh.addEventListener('click', loadOwnerMessages);
 dom.btnOwnerSearch.addEventListener('click', loadOwnerMessages);
 dom.btnOwnerBack.addEventListener('click', () => {
   dom.ownerPanel.classList.remove('show');
+  document.body.classList.remove('owner-open');
   location.href = '/';
 });
 
@@ -2327,12 +2454,9 @@ dom.btnOwnerBack.addEventListener('click', () => {
   loadBox();
   loadAnimals();
   loadNames();
+  loadMyName();
   dom.customTime.value = toLocalInput(new Date(Date.now() + 24 * 3600 * 1000));
   renderMessengerBar();
-  // 输入框自动转大写
-  dom.toBox.addEventListener('input', () => {
-    dom.toBox.value = dom.toBox.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 6);
-  });
   // URL 参数：?box=XXX 自动填收件人
   const params = new URLSearchParams(location.search);
   const boxParam = params.get('box');
