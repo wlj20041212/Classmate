@@ -3266,5 +3266,24 @@ function triggerGestureEffect(gesture) {
     }
 }
 </script>
+<!-- 飞鸽传书观景揽使：7秒自动返回 -->
+<script>
+(function(){
+  var p = new URLSearchParams(location.search);
+  if(p.get('from') !== 'chat') return;
+  var ret = p.get('return') || '/chat';
+  var bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#2a2522,#4c443b);color:#f5f0e6;font-family:serif;font-size:14px;letter-spacing:.1em;text-align:center;padding:10px;box-shadow:0 4px 16px rgba(0,0,0,.3)';
+  bar.innerHTML = '<span style="color:#c0392b">●</span> 观景揽使中…<b id="adCd" style="color:#c0392b;margin:0 4px">7</b>息后返回飞鸽传书';
+  document.body.appendChild(bar);
+  var n = 7;
+  var t = setInterval(function(){
+    n--;
+    var el = document.getElementById('adCd');
+    if(el) el.textContent = n;
+    if(n <= 0){ clearInterval(t); location.href = ret; }
+  }, 1000);
+})();
+</script>
 </body>
 </html>

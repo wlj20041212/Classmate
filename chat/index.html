@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f0e6">
+<meta name="description" content="飞鸽传书 · 古风信笺 · 一只鸽子替你捎话">
+<title>飞鸽传书 · 古风信笺</title>
+<!--
+  ============================================================
+  飞鸽传书  wanglejiang.top/chat
+  纯前端单文件应用（HTML + CSS + JS 内联）
+  后端由 Cloudflare Worker 实现，前端通过 fetch 调用：
+    https://api.wanglejiang.top/chat/api/*
+
+  接口约定（前端调用）：
+    POST /api/send   { to, content, flyHours, fromGPS:{lat,lng}|null } → { messageId }
+    GET  /api/inbox?box=XXX                                          → { messages:[...] }
+    POST /api/read   { id }                                          → { ok:true }
+    POST /api/recall { id }                                          → { ok:true }
+    GET  /api/status?id=XXX                                          → { ...message }
+    补充（"我发的信"页使用，后端需实现）：
+    GET  /api/sent?from=XXX                                          → { messages:[...] }
+
+  消息对象字段约定：
+    {
+      id: string,
+      from: "ABC123",                 // 发件信箱号
+      to: "XYZ789",                   // 收件信箱号
+      content: string,
+      status: "flying" | "delivered" | "read" | "recalled",
+      createdAt: 1690000000000,       // 发出时刻(ms)
+      deliverAt: 1690003600000,       // 预计送达时刻(ms)
+      fromGPS: {lat,lng} | null,      // 发件人坐标（首次发信时后端记录）
+      toGPS:   {lat,lng} | null,      // 收件人坐标（首次收信时后端记录）
+      readAt: 1690004000000 | null
+    }
+  ============================================================
+-->
+<style>
+/* ==================== 设计基调 ==================== */
+:root{
+  --paper:      #f5f0e6;   /* 宣纸米白 */
+  --paper-deep: #ece2cd;   /* 旧纸 */
+  --paper-line: #dcd2bb;   /* 信纸格线 */
+  --ink:        #2a2522;   /* 浓墨 */
+  --ink-soft:   #4c443b;   /* 中墨 */
+  --ink-faint:  #8b8378;   /* 淡墨 */
+  --cinnabar:   #c0392b;   /* 朱砂 */
+  --cinnabar-deep:#8e2a1f; /* 朱砂深 */
+  --cinnabar-wash: rgba(192,57,43,.09);
+  --gold:       #a88a3e;   /* 泥金点缀 */
+  --shadow:     0 10px 30px -18px rgba(74,60,40,.5);
+  --serif: "Songti SC","Noto Serif CJK SC","Source Han Serif SC","STSong","SimSun",serif;
+  --kai:   "Kaiti SC","STKaiti","KaiTi","Noto Serif CJK SC",var(--serif);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{height:100%}
+body{
+  min-height:100vh;
+  font-family:var(--serif);
+  color:var(--ink);
+  background-color:var(--paper);
+  /* 宣纸颗粒纹理 */
+  background-image:
+    radial-gradient(ellipse 120% 60% at 15% 0%, rgba(168,138,62,.05), transparent 55%),
+    radial-gradient(ellipse 100% 50% at 95% 100%, rgba(192,57,43,.035), transparent 50%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+  padding-bottom:calc(84px + env(safe-area-inset-bottom));
+  overflow-x:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea{font-family:inherit;color:var(--ink)}
+::selection{background:var(--cinnabar-wash)}
+
+/* ==================== 顶栏 ==================== */
+.masthead{
+  max-width:560px;margin:0 auto;padding:22px 20px 14px;
+  display:flex;align-items:flex-start;gap:16px;
+}
+.masthead-title{position:relative;flex:0 0 auto;width:74px}
+.masthead-title .v{
+  writing-mode:vertical-rl;letter-spacing:.35em;font-size:34px;
+  font-weight:700;font-family:var(--kai);line-height:1.15;
+  padding:8px 6px 8px 0;color:var(--ink);
+  text-shadow:1px 1px 0 rgba(255,255,255,.6);
+}
+.masthead-title .seal{
+  position:absolute;right:-2px;bottom:4px;width:34px;height:34px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--cinnabar);color:var(--paper);
+  font-size:15px;font-family:var(--kai);font-weight:700;letter-spacing:.1em;
+  border-radius:3px;
+  box-shadow:inset 0 0 0 2px rgba(245,240,230,.55), 2px 3px 6px rgba(142,42,31,.35);
+  transform:rotate(-3deg);
+}
+.masthead-title .seal::after{
+  content:"";position:absolute;inset:3px;border:1px solid rgba(245,240,230,.5);border-radius:1px;
+}
+.box-card{
+  flex:1;min-width:0;background:rgba(255,255,255,.35);
+  border:1px solid var(--paper-line);border-radius:6px;
+  box-shadow:var(--shadow);padding:12px 14px 10px;position:relative;
+}
+.box-label{font-size:12px;color:var(--ink-faint);letter-spacing:.2em;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.box-label::before{content:"";width:14px;height:1px;background:linear-gradient(90deg,var(--cinnabar),transparent)}
+.box-value{display:flex;align-items:center;gap:8px}
+.box-no{
+  font-size:26px;font-weight:700;letter-spacing:.32em;font-family:var(--kai);
+  color:var(--ink);font-variant-numeric:tabular-nums;
+}
+.btn-icon{
+  min-width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:4px;font-size:12px;letter-spacing:.1em;color:var(--ink-soft);
+  transition:background .15s ease-out, transform .15s ease-out;
+}
+.btn-icon:active{transform:scale(.94)}
+.btn-icon svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6}
+.btn-icon:hover{background:rgba(192,57,43,.08)}
+.box-meta{display:flex;justify-content:space-between;align-items:center;margin-top:2px}
+.box-meta .hint{font-size:11px;color:var(--ink-faint);letter-spacing:.06em}
+.btn-reset{
+  font-size:11px;color:var(--ink-faint);letter-spacing:.12em;padding:8px 4px;
+  border-bottom:1px dashed transparent;transition:color .15s;
+}
+.btn-reset:hover{color:var(--cinnabar);border-bottom-color:var(--cinnabar)}
+
+/* 顶部淡墨分隔线 */
+.mast-divider{max-width:560px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:10px}
+.mast-divider::before,.mast-divider::after{
+  content:"";flex:1;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(74,60,40,.35),transparent);
+}
+.mast-divider i{width:6px;height:6px;background:var(--ink-faint);transform:rotate(45deg);opacity:.65}
+
+/* ==================== 主区域 ==================== */
+main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
+.tab-page{display:none;animation:fadeUp .35s ease-out}
+.tab-page.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ---- 写信页 ---- */
+.form-title{
+  font-family:var(--kai);font-size:19px;font-weight:700;letter-spacing:.28em;
+  display:flex;align-items:center;gap:10px;margin:6px 0 14px;color:var(--ink);
+}
+.form-title::before{content:"";width:4px;height:18px;background:var(--cinnabar);border-radius:1px}
+.field{margin-bottom:16px}
+.field-label{font-size:12px;color:var(--ink-soft);letter-spacing:.2em;margin-bottom:8px;display:block}
+.field-label b{color:var(--cinnabar);font-weight:400;margin-right:2px}
+.input-box{
+  position:relative;background:rgba(255,255,255,.4);
+  border:1px solid var(--paper-line);border-radius:6px;
+  transition:border-color .2s, box-shadow .2s;
+}
+.input-box:focus-within{border-color:var(--gold);box-shadow:0 0 0 3px rgba(168,138,62,.12)}
+.input-box input{
+  width:100%;height:48px;padding:0 14px;font-size:17px;letter-spacing:.2em;
+  background:none;border:none;outline:none;color:var(--ink);
+}
+.input-box input::placeholder{color:var(--ink-faint);letter-spacing:.1em;font-size:14px}
+.textarea-wrap{position:relative}
+.textarea-wrap textarea{
+  width:100%;min-height:150px;padding:14px;font-size:16px;line-height:1.9;
+  background:
+    linear-gradient(transparent 33px, rgba(74,60,40,.14) 34px) 0 0/100% 34px,
+    rgba(255,255,255,.4);
+  background-attachment:local;
+  border:1px solid var(--paper-line);border-radius:6px;outline:none;resize:vertical;
+  transition:border-color .2s, box-shadow .2s;
+}
+.textarea-wrap textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(168,138,62,.12)}
+.char-count{position:absolute;right:10px;bottom:8px;font-size:11px;color:var(--ink-faint);letter-spacing:.08em}
+.char-count.warn{color:var(--cinnabar)}
+.duration-group{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.duration-chip{
+  height:46px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;letter-spacing:.08em;color:var(--ink-soft);
+  border:1px solid var(--paper-line);border-radius:6px;background:rgba(255,255,255,.35);
+  transition:all .16s ease-out;
+}
+.duration-chip.active{
+  background:var(--ink);color:var(--paper);border-color:var(--ink);
+  box-shadow:0 4px 12px -6px rgba(42,37,34,.5);
+}
+.duration-chip:active{transform:scale(.95)}
+.duration-custom{margin-top:10px;display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft)}
+.duration-custom.show{display:flex}
+.duration-custom input{
+  flex:1;height:44px;padding:0 10px;font-size:14px;color:var(--ink);
+  background:rgba(255,255,255,.4);border:1px solid var(--paper-line);border-radius:6px;outline:none;
+}
+.gps-note{
+  display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-faint);
+  letter-spacing:.08em;margin:-6px 0 18px;min-height:18px;
+}
+.gps-note .dot{width:6px;height:6px;border-radius:50%;background:var(--ink-faint);flex:0 0 auto}
+.gps-note.on .dot{background:var(--cinnabar);box-shadow:0 0 0 3px var(--cinnabar-wash)}
+.btn-send{
+  width:100%;height:54px;font-size:19px;letter-spacing:.6em;text-indent:.6em;
+  font-family:var(--kai);font-weight:700;color:var(--paper);
+  background:linear-gradient(180deg,var(--cinnabar),var(--cinnabar-deep));
+  border-radius:6px;box-shadow:0 6px 18px -8px rgba(142,42,31,.65), inset 0 1px 0 rgba(255,255,255,.25);
+  transition:transform .15s ease-out, filter .2s;
+}
+.btn-send:hover{filter:brightness(1.05)}
+.btn-send:active{transform:translateY(2px) scale(.995)}
+.btn-send:disabled{opacity:.6;filter:grayscale(.3);cursor:not-allowed}
+/* 起飞卡片 */
+.airborne-card{
+  display:none;margin-top:20px;padding:18px 16px 16px;border-radius:8px;
+  background:var(--paper-deep);border:1px solid var(--paper-line);
+  box-shadow:var(--shadow);position:relative;overflow:hidden;
+  animation:fadeUp .4s ease-out;
+}
+.airborne-card::before{
+  content:"";position:absolute;inset:6px;border:1px solid rgba(192,57,43,.25);
+  border-radius:5px;pointer-events:none;
+}
+.airborne-card.show{display:block}
+.airborne-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.airborne-head .stamp{
+  width:44px;height:44px;flex:0 0 auto;background:var(--cinnabar);color:var(--paper);
+  border-radius:4px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--kai);font-size:12px;letter-spacing:.08em;transform:rotate(-4deg);
+  box-shadow:inset 0 0 0 2px rgba(245,240,230,.5);
+}
+.airborne-head .t{font-family:var(--kai);font-size:18px;font-weight:700;letter-spacing:.18em}
+.airborne-head .s{font-size:12px;color:var(--ink-faint);margin-top:3px;letter-spacing:.06em}
+.airborne-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:10px}
+.airborne-meta span:last-child{color:var(--cinnabar);font-weight:600}
+.airborne-map{height:150px;border-radius:6px;overflow:hidden;border:1px solid var(--paper-line);position:relative;background:var(--paper-deep)}
+.airborne-map .leaflet-container{background:var(--paper-deep)}
+
+/* ---- 收信页 ---- */
+.section-head{display:flex;align-items:baseline;justify-content:space-between;margin:4px 0 14px}
+.section-head h2{font-family:var(--kai);font-size:19px;font-weight:700;letter-spacing:.28em;display:flex;align-items:center;gap:10px}
+.section-head h2::before{content:"";width:4px;height:18px;background:var(--cinnabar);border-radius:1px}
+.section-head .refresh{font-size:12px;color:var(--ink-faint);letter-spacing:.1em;padding:8px 6px}
+.section-head .refresh:active{color:var(--cinnabar)}
+.msg-list{display:flex;flex-direction:column;gap:12px}
+.msg-item{
+  border:1px solid var(--paper-line);border-radius:8px;background:rgba(255,255,255,.38);
+  box-shadow:var(--shadow);overflow:hidden;position:relative;
+  transition:box-shadow .2s ease-out, transform .2s ease-out;
+}
+.msg-item:active{transform:scale(.995)}
+.msg-item.unread{border-color:rgba(192,57,43,.35)}
+.msg-head{display:flex;align-items:center;gap:10px;padding:12px 14px;min-height:54px;cursor:pointer}
+.msg-status-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;position:relative}
+.msg-item.status-delivered .msg-status-dot{background:var(--cinnabar);box-shadow:0 0 0 4px var(--cinnabar-wash);animation:pulse 2s ease-in-out infinite}
+.msg-item.status-read .msg-status-dot{background:var(--ink-faint)}
+.msg-item.status-flying .msg-status-dot{background:var(--gold);animation:pulse 1.6s ease-in-out infinite}
+.msg-item.status-recalled .msg-status-dot{background:transparent;border:1px dashed var(--ink-faint)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px transparent}50%{box-shadow:0 0 0 6px var(--cinnabar-wash)}}
+.msg-from{font-family:var(--kai);font-size:15px;font-weight:700;letter-spacing:.14em}
+.msg-who{font-size:11px;color:var(--ink-faint);margin-top:2px;letter-spacing:.05em}
+.msg-right{margin-left:auto;text-align:right;flex:0 0 auto}
+.msg-badge{font-size:11px;color:var(--ink-faint);letter-spacing:.1em;display:block}
+.msg-badge.flying{color:var(--gold)}
+.msg-badge.delivered{color:var(--cinnabar)}
+.msg-time{font-size:11px;color:var(--ink-faint);margin-top:3px;display:block;letter-spacing:.03em}
+.msg-body{display:none;border-top:1px dashed var(--paper-line);padding:16px 16px 20px;position:relative}
+.msg-item.open .msg-body{display:block;animation:fadeUp .3s ease-out}
+.msg-body .paper{
+  position:relative;padding:22px 18px 30px;background:var(--paper-deep);
+  border:1px solid var(--paper-line);border-radius:4px;box-shadow:inset 0 0 40px rgba(74,60,40,.06);
+}
+.msg-body .paper::before{
+  content:"";position:absolute;top:10px;left:10px;right:10px;bottom:10px;
+  border:1px solid rgba(74,60,40,.12);border-radius:2px;pointer-events:none;
+}
+.msg-body .content{font-size:15.5px;line-height:2.05;white-space:pre-wrap;word-break:break-word}
+.msg-body .colophon{
+  margin-top:16px;text-align:right;font-size:12.5px;color:var(--ink-soft);letter-spacing:.12em;
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+}
+.msg-body .colophon::after{content:"";width:26px;height:26px;background:var(--cinnabar);border-radius:3px;flex:0 0 auto;box-shadow:inset 0 0 0 2px rgba(245,240,230,.5);transform:rotate(-3deg)}
+.msg-body .read-note{font-size:11px;color:var(--ink-faint);margin-top:8px;text-align:right;letter-spacing:.08em}
+.countdown-row{
+  display:flex;align-items:center;gap:8px;padding:0 14px 4px;font-size:12.5px;color:var(--ink-soft);
+}
+.countdown-row .cd{color:var(--cinnabar);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.msg-map{height:170px;border-top:1px dashed var(--paper-line);position:relative;background:var(--paper-deep)}
+.msg-map .leaflet-container{background:var(--paper-deep)}
+.msg-actions{padding:0 14px 14px;display:flex;gap:10px}
+.btn-recalled{
+  height:38px;padding:0 16px;font-size:12.5px;letter-spacing:.2em;color:var(--ink-faint);
+  border:1px solid var(--paper-line);border-radius:6px;background:rgba(255,255,255,.4);
+}
+.btn-recalled:not(:disabled):hover{color:var(--cinnabar);border-color:var(--cinnabar)}
+.btn-recalled:disabled{opacity:.5;cursor:not-allowed}
+
+/* 空状态 */
+.empty{
+  padding:70px 0 56px;text-align:center;display:none;
+}
+.empty.show{display:block;animation:fadeUp .5s ease-out}
+.empty .svg-wrap{width:220px;margin:0 auto 18px}
+.empty .say{font-family:var(--kai);font-size:17px;letter-spacing:.34em;color:var(--ink-soft);text-indent:.34em}
+.empty .sub{margin-top:10px;font-size:12px;color:var(--ink-faint);letter-spacing:.1em}
+
+/* ==================== 底部导航 ==================== */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:900;
+  background:rgba(245,240,230,.94);backdrop-filter:blur(8px);
+  border-top:1px solid var(--paper-line);
+  box-shadow:0 -6px 24px -18px rgba(74,60,40,.4);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.tabbar-inner{max-width:560px;margin:0 auto;display:flex}
+.tab-btn{
+  flex:1;height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--ink-faint);position:relative;transition:color .2s;
+}
+.tab-btn svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5;transition:transform .2s ease-out}
+.tab-btn .tt{font-size:11px;letter-spacing:.3em;text-indent:.3em}
+.tab-btn.active{color:var(--cinnabar)}
+.tab-btn.active svg{transform:translateY(-1px)}
+.tab-btn.active::before{
+  content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:26px;height:2px;background:var(--cinnabar);border-radius:0 0 2px 2px;
+}
+.tab-btn .reddot{
+  position:absolute;top:10px;right:calc(50% - 26px);width:9px;height:9px;border-radius:50%;
+  background:var(--cinnabar);display:none;box-shadow:0 0 0 3px rgba(192,57,43,.18);
+}
+.tab-btn .reddot.show{display:block}
+
+/* ==================== 弹幕 ==================== */
+.danmaku-layer{position:fixed;top:0;left:0;right:0;height:120px;z-index:1200;pointer-events:none;overflow:hidden}
+.danmaku{
+  position:absolute;top:18px;right:-240px;white-space:nowrap;
+  font-family:var(--kai);font-size:19px;letter-spacing:.3em;text-indent:.3em;color:var(--cinnabar);
+  text-shadow:0 1px 0 rgba(245,240,230,.9);
+  animation:fly 4.6s cubic-bezier(.25,.5,.3,1) forwards;
+}
+@keyframes fly{
+  0%{transform:translateX(0);opacity:0}
+  12%{opacity:1}
+  100%{transform:translateX(calc(-100vw - 260px));opacity:0}
+}
+
+/* ==================== Toast ==================== */
+.toast-wrap{position:fixed;left:0;right:0;bottom:110px;z-index:1400;display:flex;justify-content:center;pointer-events:none}
+.toast{
+  background:var(--ink);color:var(--paper);font-size:14px;letter-spacing:.14em;
+  padding:12px 22px;border-radius:6px;box-shadow:0 12px 30px -12px rgba(42,37,34,.7);
+  opacity:0;transform:translateY(12px);transition:opacity .25s ease-out, transform .25s ease-out;
+  max-width:84vw;text-align:center;
+}
+.toast.show{opacity:1;transform:none}
+.toast.cinnabar{background:var(--cinnabar)}
+
+/* ==================== Modal ==================== */
+.modal-mask{
+  position:fixed;inset:0;z-index:1500;background:rgba(42,37,34,.45);
+  display:flex;align-items:center;justify-content:center;padding:28px;
+  opacity:0;pointer-events:none;transition:opacity .25s ease-out;
+}
+.modal-mask.show{opacity:1;pointer-events:auto}
+.modal{
+  width:100%;max-width:330px;background:var(--paper);border-radius:8px;padding:26px 22px 20px;
+  box-shadow:0 30px 60px -20px rgba(42,37,34,.6);border:1px solid var(--paper-line);
+  transform:translateY(14px) scale(.97);transition:transform .25s cubic-bezier(.2,.8,.3,1);
+  position:relative;
+}
+.modal-mask.show .modal{transform:none}
+.modal::before{content:"";position:absolute;inset:6px;border:1px solid rgba(192,57,43,.28);border-radius:5px;pointer-events:none}
+.modal h3{
+  font-family:var(--kai);font-size:18px;letter-spacing:.3em;text-indent:.3em;color:var(--ink);
+  margin-bottom:12px;text-align:center;
+}
+.modal p{font-size:14px;line-height:1.9;color:var(--ink-soft);text-align:center;letter-spacing:.05em}
+.modal-actions{display:flex;gap:12px;margin-top:22px}
+.modal-actions button{
+  flex:1;height:46px;border-radius:6px;font-size:15px;letter-spacing:.3em;text-indent:.3em;
+  font-family:var(--kai);transition:all .15s ease-out;
+}
+.btn-cancel{background:var(--paper-deep);color:var(--ink-soft);border:1px solid var(--paper-line)}
+.btn-cancel:active{transform:scale(.97)}
+.btn-danger{background:linear-gradient(180deg,var(--cinnabar),var(--cinnabar-deep));color:var(--paper);box-shadow:0 6px 16px -8px rgba(142,42,31,.6)}
+.btn-danger:active{transform:scale(.97)}
+
+/* ==================== 地图水墨滤镜 ==================== */
+.leaflet-container{font-family:var(--serif)}
+.msg-map .leaflet-tile-pane,.airborne-map .leaflet-tile-pane{filter:grayscale(1) sepia(.16) brightness(1.06) contrast(.9)}
+.leaflet-control-attribution{font-size:9px !important;background:rgba(245,240,230,.6) !important;color:var(--ink-faint) !important}
+.pigeon-ico{width:44px;height:44px;margin-left:-22px;margin-top:-22px;transition:transform .1s linear;will-change:transform}
+.pigeon-ico svg{width:100%;height:100%;filter:drop-shadow(0 3px 4px rgba(42,37,34,.35))}
+.map-pin{width:12px;height:12px;border-radius:50%;background:var(--cinnabar);border:2px solid var(--paper);box-shadow:0 0 0 3px rgba(192,57,43,.25);margin-left:-6px;margin-top:-6px}
+
+/* ==================== 我发的信 ==================== */
+.sent-item{display:flex;align-items:center;gap:12px;padding:14px}
+.sent-item .stamp{
+  width:40px;height:40px;flex:0 0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-family:var(--kai);font-size:11px;letter-spacing:.06em;color:var(--paper);background:var(--ink-soft);
+}
+.sent-item .stamp.done{background:var(--cinnabar)}
+.sent-info{flex:1;min-width:0}
+.sent-to{font-size:15px;letter-spacing:.12em;font-weight:600;color:var(--ink)}
+.sent-sub{font-size:11.5px;color:var(--ink-faint);margin-top:3px;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sent-badge{font-size:11px;letter-spacing:.1em;flex:0 0 auto}
+.sent-badge.flying{color:var(--gold)}
+.sent-badge.delivered{color:var(--cinnabar)}
+.sent-badge.read{color:var(--ink-faint)}
+.sent-badge.recalled{color:var(--ink-faint);text-decoration:line-through}
+
+/* ==================== 动效偏好 ==================== */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+@media (min-width:620px){
+  body{padding-bottom:90px}
+  .tabbar-inner{border-left:1px solid var(--paper-line);border-right:1px solid var(--paper-line)}
+}
+
+/* ==================== 信使 · 选动物 ==================== */
+.animal-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:8px;
+}
+.animal-card{
+  position:relative;border:1.5px solid var(--paper-line);border-radius:14px;
+  padding:16px 12px 14px;background:rgba(255,255,255,.4);
+  transition:all .22s ease-out;overflow:hidden;
+}
+.animal-card.cur{border-color:var(--cinnabar);background:var(--cinnabar-wash);box-shadow:0 6px 20px -12px rgba(192,57,43,.5)}
+.animal-card.locked{opacity:.5;filter:grayscale(.6)}
+.animal-card .rarity{
+  position:absolute;top:8px;right:8px;font-size:10px;letter-spacing:.1em;
+  padding:2px 7px;border-radius:9px;background:var(--paper-line);color:var(--ink-soft);
+}
+.animal-card .rarity.rare{background:rgba(168,138,62,.18);color:#a88a3e}
+.animal-card .rarity.epic{background:rgba(192,57,43,.16);color:var(--cinnabar)}
+.animal-card .ani-svg{width:64px;height:64px;margin:4px auto 6px;display:block}
+.animal-card .ani-name{font-family:var(--kai);font-size:17px;letter-spacing:.1em;text-align:center;color:var(--ink)}
+.animal-card .ani-pet{font-size:11px;color:var(--ink-faint);text-align:center;margin-top:2px;letter-spacing:.04em}
+.animal-card .ani-stats{display:flex;justify-content:center;gap:10px;margin-top:8px;font-size:10px;color:var(--ink-faint)}
+.animal-card .ani-stats b{color:var(--ink-soft);font-weight:600}
+.animal-card .ani-count{
+  position:absolute;top:8px;left:8px;font-size:11px;color:var(--ink-soft);
+  background:rgba(245,240,230,.8);border:1px solid var(--paper-line);border-radius:8px;padding:1px 7px;
+}
+.animal-card .ani-select{
+  display:block;margin:10px auto 0;font-size:12px;letter-spacing:.2em;color:var(--cinnabar);
+  border:1px solid var(--cinnabar-soft);border-radius:20px;padding:4px 16px;background:transparent;
+}
+.animal-card.cur .ani-select{background:var(--cinnabar);color:var(--paper);border-color:var(--cinnabar)}
+
+.animal-actions{display:flex;gap:10px;margin-top:16px}
+.btn-ad,.btn-redeem{
+  flex:1;padding:12px;border-radius:12px;font-size:13px;letter-spacing:.18em;text-indent:.18em;
+  font-family:var(--serif);transition:all .2s;
+}
+.btn-ad{background:var(--ink);color:var(--paper)}
+.btn-ad:active{transform:scale(.97)}
+.btn-redeem{background:transparent;border:1.5px solid var(--cinnabar);color:var(--cinnabar)}
+.btn-redeem:active{transform:scale(.97)}
+
+/* 兑换弹窗 */
+.redeem-modal .modal input{
+  width:100%;text-align:center;letter-spacing:.3em;font-size:18px;
+  border:1.5px solid var(--paper-line);border-radius:10px;padding:10px;background:rgba(255,255,255,.5);
+  margin:6px 0 4px;text-transform:uppercase;
+}
+.redeem-modal .modal input:focus{outline:none;border-color:var(--cinnabar)}
+.gain-toast{
+  position:fixed;top:42%;left:50%;transform:translate(-50%,-50%);z-index:1400;
+  background:var(--paper);border:1.5px solid var(--cinnabar);border-radius:18px;
+  padding:24px 36px;text-align:center;box-shadow:0 24px 60px -20px rgba(74,60,40,.6);
+  animation:gainPop .5s cubic-bezier(.2,1.2,.4,1);
+}
+.gain-toast .gt-svg{width:72px;height:72px;margin:0 auto 8px;display:block}
+.gain-toast .gt-name{font-family:var(--kai);font-size:22px;letter-spacing:.12em;color:var(--cinnabar)}
+.gain-toast .gt-sub{font-size:12px;color:var(--ink-faint);margin-top:4px;letter-spacing:.1em}
+@keyframes gainPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+
+/* 鸽名展示 */
+.pet-name{
+  display:inline-block;font-family:var(--kai);font-size:13px;color:var(--cinnabar-deep);
+  background:var(--cinnabar-wash);border-radius:8px;padding:2px 10px;letter-spacing:.08em;margin-left:6px;
+}
+
+/* 死亡状态 */
+.msg-item.status-dead{opacity:.78}
+.msg-item.status-dead .msg-from{color:var(--ink-faint)}
+.dead-note{
+  margin:8px 0;padding:12px 14px;background:rgba(74,60,40,.06);border-left:3px solid var(--ink-faint);
+  border-radius:0 8px 8px 0;font-family:var(--kai);color:var(--ink-soft);font-size:14px;letter-spacing:.06em;
+}
+
+/* 信箱号分享按钮 */
+.btn-share{
+  font-size:11px;letter-spacing:.16em;color:var(--cinnabar);background:var(--cinnabar-wash);
+  border:1px solid var(--cinnabar-soft);border-radius:8px;padding:4px 10px;margin-left:6px;
+}
+
+/* 顶栏鸽子起飞装饰动画 */
+.v{position:relative}
+.v::after{
+  content:"🐦";position:absolute;right:-22px;top:-2px;font-size:14px;opacity:0;
+  animation:birdFloat 3.4s ease-in-out infinite;
+}
+@keyframes birdFloat{0%,100%{opacity:0;transform:translate(0,0)}45%{opacity:.7;transform:translate(-6px,-4px)}55%{opacity:.7;transform:translate(8px,-2px)}}
+</style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<header class="masthead">
+  <div class="masthead-title">
+    <div class="v">飞鸽传书</div>
+    <div class="seal">传书</div>
+  </div>
+  <div class="box-card">
+    <div class="box-label">你的信箱号</div>
+    <div class="box-value">
+      <span class="box-no" id="boxNo">------</span>
+      <button class="btn-icon" id="btnCopy" title="复制信箱号" aria-label="复制信箱号">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+      </button>
+      <button class="btn-icon" id="btnRenew" title="重置信箱号" aria-label="重置信箱号">
+        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/></svg>
+      </button>
+    </div>
+    <div class="box-meta">
+      <span class="hint">将此号告知友人，便可收信</span>
+      <button class="btn-share" id="btnShare">分享链接</button>
+      <button class="btn-reset" id="btnReset">重置</button>
+    </div>
+  </div>
+</header>
+<div class="mast-divider"><i></i></div>
+
+<main>
+  <!-- ============ 写信页 ============ -->
+  <section class="tab-page" id="page-send">
+    <h2 class="form-title">修书一封</h2>
+    <div class="field">
+      <label class="field-label" for="toBox"><b>*</b>收件人信箱号</label>
+      <div class="input-box">
+        <input id="toBox" type="text" maxlength="6" placeholder="六位信箱号" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label" for="msgContent"><b>*</b>鸿雁捎话</label>
+      <div class="textarea-wrap">
+        <textarea id="msgContent" maxlength="500" placeholder="写下你想捎给远方的话……"></textarea>
+        <span class="char-count" id="charCount">0/500</span>
+      </div>
+    </div>
+    <div class="field">
+      <span class="field-label">鸽子飞行时长</span>
+      <div class="duration-group" id="durationGroup">
+        <button type="button" class="duration-chip" data-hours="2">2时辰</button>
+        <button type="button" class="duration-chip active" data-hours="24">1日</button>
+        <button type="button" class="duration-chip" data-hours="72">3日</button>
+        <button type="button" class="duration-chip" data-hours="168">7日</button>
+        <button type="button" class="duration-chip" data-custom="1">择吉时</button>
+      </div>
+      <div class="duration-custom" id="durationCustom">
+        <span style="flex:0 0 auto">送达于</span>
+        <input type="datetime-local" id="customTime">
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label" for="petNameInput">信使名号 <span style="color:var(--ink-faint);font-weight:normal">（可自拟或随机）</span></label>
+      <div class="input-box" style="display:flex;gap:8px;align-items:center">
+        <input id="petNameInput" type="text" maxlength="8" placeholder="为信使取一名" autocomplete="off" style="flex:1">
+        <button type="button" class="btn-redeem" id="btnRandomName" style="flex:0 0 auto;padding:10px 14px;font-size:12px;letter-spacing:.1em">随机</button>
+      </div>
+    </div>
+    <div class="gps-note" id="gpsNote"><span class="dot"></span><span id="gpsNoteText">发送时将请求定位，以便信鸽飞抵有迹可循</span></div>
+    <button class="btn-send" id="btnSend">放飞信鸽</button>
+
+    <!-- 起飞卡片 -->
+    <div class="airborne-card" id="airborneCard">
+      <div class="airborne-head">
+        <div class="stamp">已起飞</div>
+        <div>
+          <div class="t">鸽子已起飞</div>
+          <div class="s">信鸽正展翅，穿越山河而来</div>
+        </div>
+      </div>
+      <div class="airborne-meta">
+        <span id="airborneTo">致：------</span>
+        <span id="airborneDeliver">预计送达 --</span>
+      </div>
+      <div class="airborne-map" id="airborneMap"></div>
+    </div>
+  </section>
+
+  <!-- ============ 收信页 ============ -->
+  <section class="tab-page active" id="page-inbox">
+    <div class="section-head">
+      <h2>鸿雁来仪</h2>
+      <button class="refresh" id="btnRefreshInbox">手动探信</button>
+    </div>
+    <div class="msg-list" id="inboxList"></div>
+    <div class="empty" id="inboxEmpty">
+      <div class="svg-wrap" id="emptyBird"></div>
+      <div class="say">静待鸿雁来仪</div>
+      <div class="sub">把信箱号告诉友人，信鸽自会衔信而来</div>
+    </div>
+  </section>
+
+  <!-- ============ 我发的信 ============ -->
+  <section class="tab-page" id="page-sent">
+    <div class="section-head">
+      <h2>我放飞的鸽子</h2>
+      <button class="refresh" id="btnRefreshSent">刷新</button>
+    </div>
+    <div class="msg-list" id="sentList"></div>
+    <div class="empty" id="sentEmpty">
+      <div class="svg-wrap" id="sentBird"></div>
+      <div class="say">尚无信鸽远行</div>
+      <div class="sub">去写信页放飞一只，看看它几时抵达</div>
+    </div>
+  </section>
+
+  <!-- ============ 信使 · 选动物 ============ -->
+  <section class="tab-page" id="page-animal">
+    <div class="section-head">
+      <h2>择一信使</h2>
+      <span class="refresh" style="font-size:12px;color:var(--ink-faint)">不同信使，生死有命</span>
+    </div>
+    <p style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin:4px 0 8px;letter-spacing:.04em">
+      信使越珍稀，越能穿越山河而不陨。看一段景物七息可得新使，或持兑换码换神鸟青鸟。
+    </p>
+    <div class="animal-grid" id="animalGrid"></div>
+    <div class="animal-actions">
+      <button class="btn-ad" id="btnAd">观景揽使</button>
+      <button class="btn-redeem" id="btnRedeemOpen">兑换码</button>
+    </div>
+  </section>
+</main>
+
+<!-- 底部导航 -->
+<nav class="tabbar">
+  <div class="tabbar-inner">
+    <button class="tab-btn" data-tab="send">
+      <svg viewBox="0 0 24 24"><path d="M12 19l7-7-4-4-7 7-1 5z"/><path d="M14 6l4 4"/><path d="M5 20c0-2 1-4 3-5"/></svg>
+      <span class="tt">写信</span>
+    </button>
+    <button class="tab-btn active" data-tab="inbox">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 8l8 6 8-6"/></svg>
+      <span class="reddot" id="dotInbox"></span>
+      <span class="tt">收信</span>
+    </button>
+    <button class="tab-btn" data-tab="sent">
+      <svg viewBox="0 0 24 24"><path d="M3 17l6-5-6-4"/><path d="M9 12h12"/><path d="M13 6c3 0 5 3 5 6s-2 6-5 6"/></svg>
+      <span class="tt">我发的</span>
+    </button>
+    <button class="tab-btn" data-tab="animal">
+      <svg viewBox="0 0 24 24"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/><path d="M18 8l3-2"/></svg>
+      <span class="tt">信使</span>
+    </button>
+  </div>
+</nav>
+
+<!-- 弹幕层 -->
+<div class="danmaku-layer" id="danmakuLayer"></div>
+<!-- Toast -->
+<div class="toast-wrap" id="toastWrap"><div class="toast" id="toast"></div></div>
+<!-- 重置确认 -->
+<div class="modal-mask" id="resetModal">
+  <div class="modal">
+    <h3>重置信箱号</h3>
+    <p>重置后旧信箱将无法收信，<br>亦无法再收到任何旧信。确认？</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btnResetCancel">再想想</button>
+      <button class="btn-danger" id="btnResetConfirm">确认重置</button>
+    </div>
+  </div>
+</div>
+
+<!-- 兑换码弹窗 -->
+<div class="modal-mask redeem-modal" id="redeemModal">
+  <div class="modal">
+    <h3>持码换使</h3>
+    <p style="font-size:13px;color:var(--ink-faint)">输入兑换码，换取神鸟信使</p>
+    <input type="text" id="redeemInput" placeholder="兑换码" maxlength="12" autocomplete="off" spellcheck="false">
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btnRedeemCancel">取消</button>
+      <button class="btn-danger" id="btnRedeemConfirm">兑换</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   飞鸽传书 · 前端逻辑
+   ============================================================ */
+'use strict';
+
+/* ---------- 常量与状态 ---------- */
+const API_BASE = 'https://api.wanglejiang.top/chat/api';
+const LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 排除易混 0O1Il2Z5S8B
+const POLL_MS = 30000;
+
+const state = {
+  box: '',
+  tab: 'inbox',
+  messages: [],        // 收件箱
+  sent: [],            // 我发的
+  knownIds: new Set(), // 用于检测新消息
+  flyingMaps: new Map(), // msgId -> { map, pigeon, arc, timer }
+  currentCustomHours: null,
+  customChosen: false,
+  sentinel: 0,
+  animals: {},         // 动物库存 {id:count}
+  currentAnimal: 'dove' // 当前选中信使
+};
+
+/* ---------- DOM ---------- */
+const $ = (id) => document.getElementById(id);
+const dom = {
+  boxNo: $('boxNo'), btnCopy: $('btnCopy'), btnRenew: $('btnRenew'), btnReset: $('btnReset'), btnShare: $('btnShare'),
+  toBox: $('toBox'), msgContent: $('msgContent'), charCount: $('charCount'),
+  durationGroup: $('durationGroup'), durationCustom: $('durationCustom'), customTime: $('customTime'),
+  gpsNote: $('gpsNote'), gpsNoteText: $('gpsNoteText'), btnSend: $('btnSend'),
+  airborneCard: $('airborneCard'), airborneTo: $('airborneTo'), airborneDeliver: $('airborneDeliver'), airborneMap: $('airborneMap'),
+  inboxList: $('inboxList'), inboxEmpty: $('inboxEmpty'), btnRefreshInbox: $('btnRefreshInbox'),
+  sentList: $('sentList'), sentEmpty: $('sentEmpty'), btnRefreshSent: $('btnRefreshSent'),
+  dotInbox: $('dotInbox'), danmakuLayer: $('danmakuLayer'),
+  toastWrap: $('toastWrap'), toast: $('toast'),
+  resetModal: $('resetModal'), btnResetCancel: $('btnResetCancel'), btnResetConfirm: $('btnResetConfirm'),
+  animalGrid: $('animalGrid'), btnAd: $('btnAd'), btnRedeemOpen: $('btnRedeemOpen'),
+  redeemModal: $('redeemModal'), redeemInput: $('redeemInput'),
+  btnRedeemCancel: $('btnRedeemCancel'), btnRedeemConfirm: $('btnRedeemConfirm'),
+  petNameInput: $('petNameInput'), btnRandomName: $('btnRandomName'),
+};
+
+/* ---------- 信箱号 ---------- */
+function genBox() {
+  let s = '';
+  for (let i = 0; i < 6; i++) s += LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  return s;
+}
+function loadBox() {
+  let b = localStorage.getItem('pigeon_box');
+  if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) {
+    b = genBox();
+    localStorage.setItem('pigeon_box', b);
+  }
+  state.box = b;
+  dom.boxNo.textContent = b;
+}
+function resetBox() {
+  const b = genBox();
+  localStorage.setItem('pigeon_box', b);
+  state.box = b;
+  dom.boxNo.textContent = b;
+  state.messages = []; state.sent = []; state.knownIds.clear();
+  renderInbox(); renderSent(); destroyAllMaps();
+  toast('信箱已重置，旧号作废');
+}
+
+/* ---------- Toast / 弹幕 ---------- */
+let toastTimer = null;
+function toast(text, cinnabar = false) {
+  dom.toast.textContent = text;
+  dom.toast.classList.toggle('cinnabar', cinnabar);
+  dom.toast.classList.add('show');
+  dom.toastWrap.style.display = 'flex';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    dom.toast.classList.remove('show');
+    setTimeout(() => { dom.toastWrap.style.display = 'none'; }, 300);
+  }, 2200);
+}
+function danmaku(text) {
+  const el = document.createElement('div');
+  el.className = 'danmaku';
+  el.textContent = text;
+  dom.danmakuLayer.appendChild(el);
+  setTimeout(() => el.remove(), 4800);
+}
+
+/* ---------- Tab ---------- */
+document.querySelectorAll('.tab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+function switchTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tab-page').forEach((p) => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  $('page-' + tab).classList.add('active');
+  if (tab === 'inbox') { renderInbox(); }
+  if (tab === 'sent') { fetchSent(); }
+  if (tab === 'animal') { renderAnimals(); }
+}
+
+/* ---------- 复制 ---------- */
+dom.btnCopy.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(state.box);
+    toast('已抄录', true);
+  } catch (e) {
+    // 剪贴板不可用时的兜底
+    const ta = document.createElement('textarea');
+    ta.value = state.box; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    toast('已抄录', true);
+  }
+});
+dom.btnRenew.addEventListener('click', () => {
+  const b = genBox();
+  localStorage.setItem('pigeon_box', b);
+  state.box = b; dom.boxNo.textContent = b;
+  state.messages = []; state.sent = []; state.knownIds.clear();
+  renderInbox(); renderSent(); destroyAllMaps();
+  toast('新信箱号已生成', true);
+});
+dom.btnReset.addEventListener('click', () => { dom.resetModal.classList.add('show'); });
+dom.btnResetCancel.addEventListener('click', () => { dom.resetModal.classList.remove('show'); });
+dom.resetModal.addEventListener('click', (e) => { if (e.target === dom.resetModal) dom.resetModal.classList.remove('show'); });
+dom.btnResetConfirm.addEventListener('click', () => {
+  dom.resetModal.classList.remove('show');
+  resetBox();
+});
+
+/* ---------- 写信：字数 ---------- */
+dom.msgContent.addEventListener('input', () => {
+  const n = dom.msgContent.value.length;
+  dom.charCount.textContent = n + '/500';
+  dom.charCount.classList.toggle('warn', n >= 480);
+});
+
+/* ---------- 写信：飞行时长 ---------- */
+dom.durationGroup.addEventListener('click', (e) => {
+  const chip = e.target.closest('.duration-chip');
+  if (!chip) return;
+  dom.durationGroup.querySelectorAll('.duration-chip').forEach((c) => c.classList.remove('active'));
+  chip.classList.add('active');
+  state.customChosen = !!chip.dataset.custom;
+  dom.durationCustom.classList.toggle('show', state.customChosen);
+  if (state.customChosen && !dom.customTime.value) {
+    const d = new Date(Date.now() + 24 * 3600 * 1000);
+    d.setMinutes(0, 0, 0);
+    dom.customTime.value = toLocalInput(d);
+  }
+});
+dom.customTime.addEventListener('change', () => {
+  if (!dom.customTime.value) return;
+  const target = new Date(dom.customTime.value).getTime();
+  const diff = (target - Date.now()) / 3600000;
+  if (diff <= 0) { toast('择吉时需在将来，另择时辰'); dom.customTime.value = toLocalInput(new Date(Date.now() + 3600000)); }
+});
+function toLocalInput(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function getFlyHours() {
+  const active = dom.durationGroup.querySelector('.duration-chip.active');
+  if (!active) return 24;
+  if (active.dataset.custom) {
+    const target = new Date(dom.customTime.value).getTime();
+    if (!dom.customTime.value || isNaN(target)) return 24;
+    return Math.max((target - Date.now()) / 3600000, 0.1);
+  }
+  return parseFloat(active.dataset.hours);
+}
+
+/* ---------- 信使名号：随机 ---------- */
+dom.btnRandomName.addEventListener('click', () => {
+  dom.petNameInput.value = pickName();
+});
+
+/* ---------- GPS ---------- */
+let lastGPS = null;
+function requestGPS() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    const done = (pos) => {
+      lastGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      dom.gpsNote.classList.add('on');
+      dom.gpsNoteText.textContent = '已记录发信坐标，信鸽飞行有迹可循';
+      resolve(lastGPS);
+    };
+    const fail = () => {
+      dom.gpsNote.classList.remove('on');
+      dom.gpsNoteText.textContent = '未取得定位，信鸽将只以倒计时飞抵';
+      resolve(null);
+    };
+    navigator.geolocation.getCurrentPosition(done, fail, { enableHighAccuracy: false, timeout: 6000, maximumAge: 120000 });
+  });
+}
+
+/* ---------- 写信：发送 ---------- */
+dom.btnSend.addEventListener('click', sendMessage);
+async function sendMessage() {
+  const to = dom.toBox.value.trim().toUpperCase();
+  const content = dom.msgContent.value.trim();
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(to)) { toast('收件人信箱号为六位，请核对'); return; }
+  if (!content) { toast('总得写几句心里话'); return; }
+
+  const animal = ANIMALS[state.currentAnimal] || ANIMALS.dove;
+  let petName = (dom.petNameInput.value || '').trim();
+  if(!petName) petName = pickName();
+  // 死亡判定：按动物死亡率，飞行时长越长风险略增
+  const flyHours = getFlyHours();
+  const baseDeath = animal.death;
+  const lengthRisk = Math.min(flyHours / 168, 1) * 0.06; // 7日最多+6%
+  const willDie = Math.random() < (baseDeath + lengthRisk);
+
+  dom.btnSend.disabled = true;
+  dom.btnSend.textContent = '正召' + animal.name + '…';
+  try {
+    const fromGPS = await requestGPS();
+    const res = await fetch(`${API_BASE}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, content, flyHours, fromGPS, animal: animal.id, petName, willDie })
+    });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json().catch(() => ({}));
+    const messageId = data.messageId || data.id || Date.now().toString();
+    const deliverAt = Date.now() + flyHours * 3600000;
+    showAirborne(to, deliverAt, fromGPS, animal, petName);
+    dom.msgContent.value = '';
+    dom.charCount.textContent = '0/500';
+    dom.petNameInput.value = '';
+    if (willDie) {
+      // 消耗一只信使（阵亡）
+      consumeAnimal(animal.id);
+      setTimeout(() => toast(animal.name + '「' + petName + '」前途凶险…', true), 1400);
+    } else {
+      consumeAnimal(animal.id);
+    }
+    if (to === state.box) { setTimeout(() => fetchInbox(), 500); }
+  } catch (e) {
+    toast('飞鸽疲惫，稍后再试');
+  } finally {
+    dom.btnSend.disabled = false;
+    dom.btnSend.textContent = '放飞信使';
+  }
+}
+
+/* 起飞卡片 + 轨迹缩略图 */
+async function showAirborne(to, deliverAt, fromGPS, animal, petName) {
+  dom.airborneCard.classList.add('show');
+  dom.airborneTo.innerHTML = '致：' + to + (animal ? '<span class="pet-name">' + esc(animal.name) + '·' + esc(petName || '') + '</span>' : '');
+  dom.airborneDeliver.textContent = '预计送达 ' + formatFull(deliverAt);
+  const el = dom.airborneMap;
+  el.innerHTML = '';
+  if (fromGPS && window.L) {
+    renderMiniMap(el, fromGPS, { lat: fromGPS.lat + 0.35, lng: fromGPS.lng + 0.55 }, deliverAt);
+  } else if (fromGPS) {
+    try {
+      const L = await loadLeaflet();
+      renderMiniMap(el, fromGPS, { lat: fromGPS.lat + 0.35, lng: fromGPS.lng + 0.55 }, deliverAt);
+    } catch (e) { renderArcPlaceholder(el); }
+  } else {
+    renderArcPlaceholder(el);
+  }
+  dom.airborneCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function renderArcPlaceholder(el) {
+  el.innerHTML = `<svg viewBox="0 0 320 120" style="width:100%;height:100%">
+    <path d="M24 96 Q160 4 296 96" fill="none" stroke="rgba(74,60,40,.35)" stroke-width="1.6" stroke-dasharray="5 6"/>
+    <g transform="translate(24 96)"><circle r="4" fill="#c0392b"/></g>
+    <g transform="translate(296 96)"><circle r="4" fill="rgba(74,60,40,.5)"/></g>
+    <g transform="translate(24 96) scale(0.9)">
+      <g transform="rotate(-24 14 14)">${PIGEON_SVG}</g>
+    </g>
+  </svg>`;
+}
+
+/* ============================================================
+   Leaflet 懒加载与地图绘制
+   ============================================================ */
+let leafletPromise = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  if (leafletPromise) return leafletPromise;
+  leafletPromise = new Promise((resolve, reject) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = () => resolve(window.L);
+    s.onerror = () => { leafletPromise = null; reject(new Error('leaflet')); };
+    document.head.appendChild(s);
+  });
+  return leafletPromise;
+}
+
+/* 简笔鸽子 SVG（朝向右侧） */
+const PIGEON_SVG = `<svg viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
+  <g fill="#2a2522">
+    <path d="M5 17.5c-.6-6.5 7.4-10.6 15-6.6 4.6 2.4 6 6.8 4.4 10.2-1.5 3.2-6.4 4.6-11 3.6-4-.9-7.6-3-8.4-7.2z"/>
+    <circle cx="21.6" cy="8.4" r="3.1"/>
+    <path d="M24.6 7.4l3.2 1-3.4 1.4z"/>
+    <circle cx="22.6" cy="7.6" r=".7" fill="#f5f0e6"/>
+    <path d="M9.5 14.6c3.8-5 10.6-6.4 15.6-4-3.6 3-7.8 4.6-11.6 4.9-1.5.1-3-.5-4-.9z"/>
+    <path d="M5.6 17.6L.8 22.4l4 1.6z"/>
+  </g>
+</svg>`;
+
+/* 二次贝塞尔弧线 */
+function arcPoints(a, b, seg = 72) {
+  const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+  const d = Math.hypot(a.lat - b.lat, a.lng - b.lng);
+  const bulge = Math.max(d * 0.22, 0.8);
+  const c = { lat: mid.lat + bulge, lng: mid.lng };
+  const pts = [];
+  for (let i = 0; i <= seg; i++) {
+    const t = i / seg;
+    const x = (1 - t) * (1 - t) * a.lng + 2 * (1 - t) * t * c.lng + t * t * b.lng;
+    const y = (1 - t) * (1 - t) * a.lat + 2 * (1 - t) * t * c.lat + t * t * b.lat;
+    pts.push([y, x]);
+  }
+  return pts;
+}
+function arcPointAt(a, b, t) {
+  const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+  const d = Math.hypot(a.lat - b.lat, a.lng - b.lng);
+  const bulge = Math.max(d * 0.22, 0.8);
+  const c = { lat: mid.lat + bulge, lng: mid.lng };
+  const mt = 1 - t;
+  return [mt * mt * a.lat + 2 * mt * t * c.lat + t * t * b.lat,
+          mt * mt * a.lng + 2 * mt * t * c.lng + t * t * b.lng];
+}
+
+/* 渲染单条飞行地图：地图 + 虚线弧 + 鸽子动画 */
+async function renderFlyingMap(container, msg) {
+  if (!msg.fromGPS || !msg.toGPS) return;
+  const L = await loadLeaflet().catch(() => null);
+  if (!L || !container.isConnected) return;
+  const key = msg.id + '-' + (state.sentinel++);
+
+  const map = L.map(container, {
+    zoomControl: false,
+    attributionControl: true,
+    scrollWheelZoom: false,
+    touchZoom: false,
+    dragging: false
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 17,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  const from = { lat: msg.fromGPS.lat, lng: msg.fromGPS.lng };
+  const to = { lat: msg.toGPS.lat, lng: msg.toGPS.lng };
+  const arc = arcPoints(from, to);
+  L.polyline(arc, { color: '#a88a3e', weight: 1.6, dashArray: '4 7', opacity: .8 }).addTo(map);
+  L.circleMarker([from.lat, from.lng], { radius: 5, color: '#c0392b', weight: 2, fillColor: '#c0392b', fillOpacity: 1 }).addTo(map);
+  L.circleMarker([to.lat, to.lng], { radius: 5, color: '#4c443b', weight: 2, fillColor: '#4c443b', fillOpacity: 1 }).addTo(map);
+
+  const icon = L.divIcon({
+    className: '', html: `<div class="pigeon-ico">${PIGEON_SVG}</div>`,
+    iconSize: [44, 44], iconAnchor: [22, 22]
+  });
+  const pigeon = L.marker([from.lat, from.lng], { icon, interactive: false }).addTo(map);
+
+  const bounds = L.latLngBounds(arc);
+  map.fitBounds(bounds.pad(0.3));
+
+  const record = { map, pigeon, msg, lastPx: null };
+  state.flyingMaps.set(key, record);
+  record.key = key;
+  animatePigeon(record);
+  return record;
+}
+
+/* 鸽子沿弧线移动 + 朝向旋转 */
+function animatePigeon(record) {
+  const { map, pigeon, msg } = record;
+  const now = Date.now();
+  const total = msg.deliverAt - msg.createdAt;
+  const remain = msg.deliverAt - now;
+  const t = Math.min(Math.max(1 - remain / total, 0), 1);
+  const [lat, lng] = arcPointAt({ lat: msg.fromGPS.lat, lng: msg.fromGPS.lng },
+                                 { lat: msg.toGPS.lat, lng: msg.toGPS.lng }, t);
+  pigeon.setLatLng([lat, lng]);
+
+  const pNow = map.latLngToContainerPoint([lat, lng]);
+  const t2 = Math.min(t + 0.012, 1);
+  const [lat2, lng2] = arcPointAt({ lat: msg.fromGPS.lat, lng: msg.fromGPS.lng },
+                                   { lat: msg.toGPS.lat, lng: msg.toGPS.lng }, t2);
+  const pNext = map.latLngToContainerPoint([lat2, lng2]);
+  const angle = Math.atan2(pNext.y - pNow.y, pNext.x - pNow.x) * 180 / Math.PI;
+  const el = pigeon.getElement();
+  if (el) {
+    const ico = el.querySelector('.pigeon-ico');
+    if (ico) ico.style.transform = 'rotate(' + (angle + 90) + 'deg)';
+  }
+  record.lastPx = pNow;
+  if (t >= 1) { record.arrived = true; }
+}
+
+function destroyMap(record) {
+  if (record && record.map) {
+    record.map.remove();
+  }
+}
+function destroyAllMaps() {
+  state.flyingMaps.forEach((r) => destroyMap(r));
+  state.flyingMaps.clear();
+}
+
+/* 起飞卡片缩略地图（简单示意） */
+function renderMiniMap(el, a, b, deliverAt) {
+  const L = window.L;
+  const map = L.map(el, { zoomControl: false, attributionControl: true, scrollWheelZoom: false, touchZoom: false, dragging: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '© OpenStreetMap' }).addTo(map);
+  const arc = arcPoints(a, b, 40);
+  L.polyline(arc, { color: '#a88a3e', weight: 1.5, dashArray: '4 6', opacity: .8 }).addTo(map);
+  L.circleMarker([a.lat, a.lng], { radius: 4, color: '#c0392b', weight: 2, fillColor: '#c0392b', fillOpacity: 1 }).addTo(map);
+  L.circleMarker([b.lat, b.lng], { radius: 4, color: '#4c443b', weight: 2, fillColor: '#4c443b', fillOpacity: 1 }).addTo(map);
+  map.fitBounds(L.latLngBounds(arc).pad(0.4));
+  const icon = L.divIcon({ className: '', html: `<div class="pigeon-ico">${PIGEON_SVG}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] });
+  L.marker(a, { icon, interactive: false }).addTo(map);
+}
+
+/* ============================================================
+   收信：轮询 / 渲染
+   ============================================================ */
+async function fetchInbox() {
+  if (!state.box) return;
+  try {
+    const res = await fetch(`${API_BASE}/inbox?box=${encodeURIComponent(state.box)}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data.messages || data.list || []);
+    let hasNew = false;
+    list.forEach((m) => {
+      if (!state.knownIds.has(m.id)) {
+        if (state.knownIds.size > 0) hasNew = true;
+        state.knownIds.add(m.id);
+      }
+    });
+    state.messages = list;
+    renderInbox();
+    if (hasNew) {
+      dom.dotInbox.classList.add('show');
+      danmaku('有鸽来仪');
+    }
+  } catch (e) {
+    // 轮询失败静默，避免频繁打扰
+  }
+}
+function renderInbox() {
+  const list = state.messages;
+  const hasFlying = list.some((m) => m.status === 'flying' && m.fromGPS && m.toGPS);
+
+  dom.inboxEmpty.classList.toggle('show', list.length === 0);
+  dom.inboxList.innerHTML = '';
+
+  // 清理已消失的飞行地图
+  const valid = new Set(list.filter((m) => m.status === 'flying').map((m) => m.id));
+  state.flyingMaps.forEach((r, k) => {
+    if (!valid.has(r.msg.id)) { destroyMap(r); state.flyingMaps.delete(k); }
+  });
+
+  list.slice().sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0)).forEach((m) => {
+    dom.inboxList.appendChild(buildInboxItem(m));
+  });
+
+  if (hasFlying) renderFlyingInboxMaps();
+}
+function buildInboxItem(m) {
+  const item = document.createElement('div');
+  item.className = 'msg-item status-' + (m.status || 'delivered') + (m.status === 'delivered' ? ' unread' : '');
+  item.dataset.id = m.id;
+
+  const head = document.createElement('div');
+  head.className = 'msg-head';
+  head.innerHTML = `
+    <span class="msg-status-dot"></span>
+    <div>
+      <div class="msg-from">${esc(m.from || '无名氏')}${m.petName ? '<span class="pet-name">' + esc((ANIMALS[m.animal]||ANIMALS.dove).name) + '·' + esc(m.petName) + '</span>' : ''}</div>
+      <div class="msg-who">${m.from ? '来自信箱 ' + esc(m.from) : ''}</div>
+    </div>
+    <div class="msg-right">
+      <span class="msg-badge ${m.status}">${statusText(m.status)}</span>
+      <span class="msg-time">${m.createdAt ? formatShort(m.createdAt) : ''}</span>
+    </div>`;
+  item.appendChild(head);
+
+  // 飞行中：倒计时行
+  if (m.status === 'flying') {
+    const row = document.createElement('div');
+    row.className = 'countdown-row';
+    row.innerHTML = `<span>信鸽在途，尚有</span><span class="cd" data-cd="${m.id}">--</span><span>抵达</span>`;
+    item.appendChild(row);
+  }
+  // 飞行中：地图容器
+  if (m.status === 'flying') {
+    const mapEl = document.createElement('div');
+    mapEl.className = 'msg-map';
+    mapEl.dataset.map = m.id;
+    item.appendChild(mapEl);
+  }
+  // 正文信纸（已送达 / 已读）
+  if (m.status === 'delivered' || m.status === 'read') {
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    body.innerHTML = `
+      <div class="paper">
+        <div class="content">${esc(m.content || '')}</div>
+        <div class="colophon">${m.from || ''} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
+        ${m.status === 'read' && m.readAt ? `<div class="read-note">已展阅 · ${formatShort(m.readAt)}</div>` : ''}
+      </div>`;
+    item.appendChild(body);
+  }
+  if (m.status === 'recalled') {
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    body.innerHTML = `<div class="paper"><div class="content" style="color:var(--ink-faint)">此信已被发信人召回，信鸽中途折返。</div></div>`;
+    item.appendChild(body);
+  }
+  if (m.status === 'dead') {
+    const ani = ANIMALS[m.animal] || ANIMALS.dove;
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    body.innerHTML = `<div class="dead-note">信使「${esc(ani.name)}${m.petName ? '·' + esc(m.petName) : ''}」中途殒命，书信散落山河，未能送达。</div>`;
+    item.appendChild(body);
+  }
+  // 点击：已送达/已读 → 展开 + 标记已读
+  head.addEventListener('click', () => {
+    const isOpen = item.classList.toggle('open');
+    if (isOpen && m.status === 'delivered') {
+      m.status = 'read';
+      item.classList.remove('status-delivered', 'unread');
+      item.classList.add('status-read');
+      item.querySelector('.msg-badge').textContent = '已送达';
+      item.querySelector('.msg-badge').classList.remove('delivered');
+      item.querySelector('.msg-badge').classList.add('read');
+      item.querySelector('.msg-badge').textContent = '已读';
+      item.querySelector('.msg-badge').classList.remove('read');
+      // 重新构建正文区域以显示"已展阅"
+      const oldBody = item.querySelector('.msg-body');
+      const body = document.createElement('div');
+      body.className = 'msg-body';
+      body.innerHTML = `
+        <div class="paper">
+          <div class="content">${esc(m.content || '')}</div>
+          <div class="colophon">${m.from || ''} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
+          <div class="read-note">已展阅 · ${formatShort(Date.now())}</div>
+        </div>`;
+      oldBody.replaceWith(body);
+      m.readAt = Date.now();
+      fetch(`${API_BASE}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: m.id })
+      }).catch(() => {});
+    }
+  });
+  return item;
+}
+function statusText(s) {
+  return { flying: '飞行中', delivered: '已送达', read: '已读', recalled: '已召回', dead: '信使殒命' }[s] || s;
+}
+
+/* 渲染所有飞行中消息的地图（懒初始化） */
+async function renderFlyingInboxMaps() {
+  const flying = state.messages.filter((m) => m.status === 'flying' && m.fromGPS && m.toGPS);
+  if (!flying.length) return;
+  for (const m of flying) {
+    const el = document.querySelector(`.msg-map[data-map="${m.id}"]`);
+    if (!el || el.dataset.rendered) continue;
+    el.dataset.rendered = '1';
+    await renderFlyingMap(el, m);
+  }
+}
+
+/* ============================================================
+   我发的信
+   ============================================================ */
+async function fetchSent() {
+  try {
+    const res = await fetch(`${API_BASE}/sent?from=${encodeURIComponent(state.box)}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    state.sent = Array.isArray(data) ? data : (data.messages || data.list || []);
+    renderSent();
+  } catch (e) {
+    if (state.sent.length === 0) {
+      dom.sentList.innerHTML = '';
+      dom.sentEmpty.classList.add('show');
+    }
+  }
+}
+function renderSent() {
+  const list = state.sent;
+  dom.sentEmpty.classList.toggle('show', list.length === 0);
+  dom.sentList.innerHTML = '';
+  list.slice().sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0)).forEach((m) => {
+    const item = document.createElement('div');
+    item.className = 'msg-item';
+    const st = m.status || 'flying';
+    const done = st === 'delivered' || st === 'read';
+    const inner = document.createElement('div');
+    inner.className = 'sent-item';
+    inner.innerHTML = `
+      <span class="stamp ${done ? 'done' : ''}">${esc(m.to || '')}</span>
+      <div class="sent-info">
+        <div class="sent-to">致：${esc(m.to || '')}</div>
+        <div class="sent-sub">${esc(m.content || '')}</div>
+      </div>
+      <span class="sent-badge ${st}">${statusText(st)}</span>`;
+    item.appendChild(inner);
+    if (st === 'flying') {
+      const act = document.createElement('div');
+      act.className = 'msg-actions';
+      const rb = document.createElement('button');
+      rb.className = 'btn-recalled';
+      rb.textContent = '召回信鸽';
+      rb.addEventListener('click', async () => {
+        try {
+          const res = await fetch(`${API_BASE}/recall`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: m.id })
+          });
+          if (!res.ok) throw new Error();
+          m.status = 'recalled';
+          renderSent();
+          toast('信鸽已召回');
+        } catch (e) { toast('飞鸽疲惫，稍后再试'); }
+      });
+      act.appendChild(rb);
+      item.appendChild(act);
+    }
+    dom.sentList.appendChild(item);
+  });
+}
+
+/* ============================================================
+   轮询调度 / visibilitychange
+   ============================================================ */
+let pollTimer = null;
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') fetchInbox();
+  }, POLL_MS);
+}
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    startPolling();
+    fetchInbox();
+  } else {
+    stopPolling();
+  }
+});
+dom.btnRefreshInbox.addEventListener('click', fetchInbox);
+dom.btnRefreshSent.addEventListener('click', fetchSent);
+
+/* ============================================================
+   全局倒计时 + 鸽子动画帧
+   ============================================================ */
+setInterval(() => {
+  document.querySelectorAll('[data-cd]').forEach((el) => {
+    const m = state.messages.find((x) => x.id === el.dataset.cd);
+    if (m) el.textContent = formatRemain(m.deliverAt - Date.now());
+  });
+}, 1000);
+
+let rafId = null;
+function frame() {
+  state.flyingMaps.forEach((r) => {
+    if (r.arrived || r.msg.status !== 'flying') return;
+    animatePigeon(r);
+    // 到达后清理地图
+    const now = Date.now();
+    if (now >= r.msg.deliverAt) {
+      r.arrived = true;
+      setTimeout(() => { destroyMap(r); state.flyingMaps.delete(r.key); fetchInbox(); }, 1200);
+    }
+  });
+  rafId = requestAnimationFrame(frame);
+}
+frame();
+
+/* ============================================================
+   工具函数
+   ============================================================ */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+function pad(n) { return String(n).padStart(2, '0'); }
+function formatFull(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function formatShort(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return `今日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getMonth()+1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function formatRemain(ms) {
+  if (ms <= 0) return '已抵达';
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}日${pad(h)}时${pad(m)}分`;
+  if (h > 0) return `${h}时${pad(m)}分${pad(sec)}秒`;
+  return `${pad(m)}分${pad(sec)}秒`;
+}
+
+/* ============================================================
+   空状态水墨鸽子（内联 SVG 装饰）
+   ============================================================ */
+const EMPTY_BIRD_SVG = `<svg viewBox="0 0 240 180" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%">
+  <!-- 墨枝 -->
+  <path d="M8 168 C50 150 96 138 138 124 C168 114 200 104 232 88" stroke="#4c443b" stroke-width="4.5" stroke-linecap="round" opacity=".85"/>
+  <path d="M138 124 C150 132 164 148 176 158" stroke="#4c443b" stroke-width="2.5" stroke-linecap="round" opacity=".6"/>
+  <path d="M96 138 C88 130 82 120 80 110" stroke="#4c443b" stroke-width="2.2" stroke-linecap="round" opacity=".55"/>
+  <!-- 叶 -->
+  <path d="M80 110 C74 104 70 96 72 88 C80 92 84 100 80 110Z" fill="#8b8378" opacity=".55"/>
+  <path d="M176 158 C182 152 190 150 196 154 C190 160 182 162 176 158Z" fill="#8b8378" opacity=".5"/>
+  <!-- 鸽影（落于枝上 132,122 附近，朝右） -->
+  <g opacity=".9">
+    <path d="M128 122 C124 110 138 102 152 106 C162 108 166 118 160 124 C150 132 130 132 128 122Z" fill="#2a2522"/>
+    <circle cx="156" cy="100" r="4.5" fill="#2a2522"/>
+    <path d="M160 99 L166 101 L160 104Z" fill="#2a2522"/>
+    <path d="M140 114 C146 102 158 98 168 102 C162 108 154 112 146 114 C144 114 142 114 140 114Z" fill="#2a2522" opacity=".85"/>
+    <path d="M130 122 L120 128 L126 132Z" fill="#2a2522" opacity=".8"/>
+    <path d="M128 120 C124 116 124 112 128 110 C130 113 130 117 128 120Z" fill="#f5f0e6" opacity=".85"/>
+  </g>
+  <!-- 淡墨远山 -->
+  <path d="M0 172 C30 158 60 164 90 156 C120 148 150 160 180 152 C205 146 225 150 240 144 L240 180 L0 180Z" fill="#8b8378" opacity=".16"/>
+  <!-- 印章 -->
+  <rect x="206" y="26" width="24" height="24" rx="2" fill="#c0392b" opacity=".85"/>
+  <text x="218" y="44" text-anchor="middle" font-size="12" font-family="KaiTi,STKaiti,serif" fill="#f5f0e6" opacity=".9">静候</text>
+</svg>`;
+document.addEventListener('DOMContentLoaded', () => {
+  dom.inboxEmpty.querySelector('.svg-wrap') && ($('emptyBird').innerHTML = EMPTY_BIRD_SVG);
+  $('sentBird').innerHTML = EMPTY_BIRD_SVG;
+});
+
+/* ============================================================
+   信使 · 动物系统
+   ============================================================ */
+const ANIMALS = {
+  dove:   { id:'dove',   name:'灰鸽', rarity:'普通', speed:1.0, death:0.12, emoji:'🐦', desc:'朴实可靠' },
+  goose:  { id:'goose',  name:'鸿雁', rarity:'普通', speed:1.1, death:0.08, emoji:'🦢', desc:'稳健远行' },
+  swallow:{ id:'swallow',name:'燕子', rarity:'普通', speed:1.3, death:0.15, emoji:'🕊️', desc:'疾速脆弱' },
+  white:  { id:'white',  name:'白鸽', rarity:'稀有', speed:1.0, death:0.05, emoji:'🤍', desc:'纯洁守信' },
+  eagle:  { id:'eagle',  name:'苍鹰', rarity:'稀有', speed:1.5, death:0.20, emoji:'🦅', desc:'疾速凶险' },
+  blue:   { id:'blue',   name:'青鸟', rarity:'史诗', speed:1.0, death:0.00, emoji:'💙', desc:'神鸟不陨' }
+};
+const ANI_ORDER = ['dove','goose','swallow','white','eagle','blue'];
+const NAME_POOL = ['墨翎','云翼','逐月','乘风','破晓','听雪','渡星','栖霞','凌川','望舒','衔枝','归鸿','振羽','穿林','映霜','逐光','落梅','栖云','踏雪','鸣涧'];
+
+function loadAnimals(){
+  let a = {};
+  try { a = JSON.parse(localStorage.getItem('pigeon_animals') || '{}'); } catch(e){}
+  if(!a.dove) a.dove = 3; // 默认送3只灰鸽
+  state.animals = a;
+  let cur = localStorage.getItem('pigeon_current_animal');
+  if(!cur || !a[cur]) cur = 'dove';
+  state.currentAnimal = cur;
+  localStorage.setItem('pigeon_animals', JSON.stringify(a));
+  localStorage.setItem('pigeon_current_animal', cur);
+}
+function saveAnimals(){
+  localStorage.setItem('pigeon_animals', JSON.stringify(state.animals));
+}
+function consumeAnimal(id){
+  if(state.animals[id] > 0) state.animals[id]--;
+  if(state.animals[id] <= 0){
+    delete state.animals[id];
+    if(state.currentAnimal === id) state.currentAnimal = 'dove';
+    if(!state.animals.dove) state.animals.dove = 1; // 保底送1只灰鸽
+    localStorage.setItem('pigeon_current_animal', state.currentAnimal);
+  }
+  saveAnimals();
+  if(state.tab === 'animal') renderAnimals();
+}
+function addAnimal(id, n=1){
+  state.animals[id] = (state.animals[id]||0) + n;
+  saveAnimals();
+}
+function pickName(){
+  return NAME_POOL[Math.floor(Math.random()*NAME_POOL.length)];
+}
+
+function animalSvg(id){
+  const a = ANIMALS[id];
+  if(!a) return '';
+  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><text x="32" y="42" text-anchor="middle" font-size="38">${a.emoji}</text></svg>`;
+}
+
+function renderAnimals(){
+  const grid = dom.animalGrid;
+  grid.innerHTML = '';
+  ANI_ORDER.forEach(id => {
+    const a = ANIMALS[id];
+    const count = state.animals[id] || 0;
+    const cur = state.currentAnimal === id;
+    const locked = count <= 0;
+    const card = document.createElement('div');
+    card.className = 'animal-card' + (cur?' cur':'') + (locked?' locked':'');
+    card.innerHTML = `
+      <span class="rarity ${a.rarity==='稀有'?'rare':a.rarity==='史诗'?'epic':''}">${a.rarity}</span>
+      ${count>0?`<span class="ani-count">×${count}</span>`:''}
+      <div class="ani-svg">${animalSvg(id)}</div>
+      <div class="ani-name">${a.name}</div>
+      <div class="ani-pet">${a.desc}</div>
+      <div class="ani-stats"><span>速<b>×${a.speed}</b></span><span>陨<b>${Math.round(a.death*100)}%</b></span></div>
+      <button class="ani-select" ${locked?'disabled':''}>${cur?'当前信使':locked?'未拥有':'择为信使'}</button>`;
+    if(!locked){
+      card.addEventListener('click', () => {
+        state.currentAnimal = id;
+        localStorage.setItem('pigeon_current_animal', id);
+        renderAnimals();
+        toast('已择「'+a.name+'」为信使', true);
+      });
+    }
+    grid.appendChild(card);
+  });
+}
+
+/* ---------- 看广告获取动物 ---------- */
+dom.btnAd.addEventListener('click', () => {
+  // 随机跳转 AI 或 Christmas，7秒后自动返回
+  const target = Math.random() < 0.5 ? '/ai.html' : '/christmas.html';
+  const returnUrl = location.origin + location.pathname;
+  localStorage.setItem('pigeon_ad', JSON.stringify({ start: Date.now(), return: returnUrl }));
+  // 带 from=chat 参数，目标页面检测后7秒倒计时自动返回
+  location.href = target + '?from=chat&return=' + encodeURIComponent(returnUrl);
+});
+
+/* 从广告页返回后，结算奖励 */
+function checkAdReward(){
+  const raw = localStorage.getItem('pigeon_ad');
+  if(!raw) return;
+  let info;
+  try { info = JSON.parse(raw); } catch(e){ localStorage.removeItem('pigeon_ad'); return; }
+  // 已结算过则跳过
+  if(info.rewarded){ return; }
+  const elapsed = Date.now() - info.start;
+  if(elapsed < 6000){ return; } // 未满7秒，不发奖励
+  // 结算：随机获得一只（白鸽/苍鹰低概率）
+  const r = Math.random();
+  let getId;
+  if(r < 0.40) getId = 'goose';
+  else if(r < 0.72) getId = 'swallow';
+  else if(r < 0.88) getId = 'white';
+  else getId = 'eagle';
+  addAnimal(getId, 1);
+  info.rewarded = true;
+  localStorage.setItem('pigeon_ad', JSON.stringify(info));
+  showGainToast(getId);
+  // 清除标记
+  setTimeout(() => localStorage.removeItem('pigeon_ad'), 1000);
+}
+
+function showGainToast(id){
+  const a = ANIMALS[id];
+  const el = document.createElement('div');
+  el.className = 'gain-toast';
+  el.innerHTML = `
+    <div class="gt-svg">${animalSvg(id)}</div>
+    <div class="gt-name">${a.name}</div>
+    <div class="gt-sub">${a.rarity} · ${a.desc}</div>`;
+  document.body.appendChild(el);
+  danmaku('喜得新使「'+a.name+'」');
+  setTimeout(() => { el.style.transition='opacity .4s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }, 2200);
+  if(state.tab === 'animal') renderAnimals();
+}
+
+/* ---------- 兑换码 ---------- */
+const REDEEM_CODES = {
+  'WZWWLJ': 'all'   // 兑换全部动物
+};
+dom.btnRedeemOpen.addEventListener('click', () => {
+  dom.redeemInput.value = '';
+  dom.redeemModal.classList.add('show');
+  setTimeout(() => dom.redeemInput.focus(), 100);
+});
+dom.btnRedeemCancel.addEventListener('click', () => dom.redeemModal.classList.remove('show'));
+dom.redeemModal.addEventListener('click', (e) => { if(e.target === dom.redeemModal) dom.redeemModal.classList.remove('show'); });
+dom.btnRedeemConfirm.addEventListener('click', () => {
+  const code = dom.redeemInput.value.trim().toUpperCase();
+  if(!code){ toast('请输入兑换码'); return; }
+  const val = REDEEM_CODES[code];
+  if(!val){ toast('兑换码有误', true); return; }
+  dom.redeemModal.classList.remove('show');
+  if(val === 'all'){
+    ANI_ORDER.forEach(id => addAnimal(id, 1));
+    toast('已换得全部信使', true);
+    if(state.tab === 'animal') renderAnimals();
+  } else {
+    addAnimal(val, 1);
+    showGainToast(val);
+  }
+});
+
+/* ---------- 信箱号分享 ---------- */
+dom.btnShare.addEventListener('click', async () => {
+  const url = location.origin + location.pathname + '?box=' + state.box;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('分享链接已抄录，发给友人即可', true);
+  } catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    toast('分享链接已抄录', true);
+  }
+});
+
+/* ============================================================
+   启动
+   ============================================================ */
+(function init() {
+  loadBox();
+  loadAnimals();
+  dom.customTime.value = toLocalInput(new Date(Date.now() + 24 * 3600 * 1000));
+  // 输入框自动转大写
+  dom.toBox.addEventListener('input', () => {
+    dom.toBox.value = dom.toBox.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, '').slice(0, 6);
+  });
+  // URL 参数：?box=XXX 自动填收件人
+  const params = new URLSearchParams(location.search);
+  const boxParam = params.get('box');
+  if(boxParam && /^[A-HJ-NP-Z2-9]{6}$/i.test(boxParam)){
+    dom.toBox.value = boxParam.toUpperCase();
+    switchTab('send');
+  }
+  // 从广告页返回，结算奖励
+  checkAdReward();
+  // 首次拉取（不触发弹幕）
+  fetchInbox().then(() => { renderInbox(); });
+  startPolling();
+})();
+</script>
+</body>
+</html>
