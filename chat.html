@@ -808,7 +808,7 @@ body.owner-open .tabbar{display:none}
   <div class="modal">
     <h3>为信箱取名</h3>
     <p style="font-size:13px;color:var(--ink-faint)">对方输入你的信箱号时，会看到你名号的最后一个字（最多 8 字）</p>
-    <input type="text" id="boxNameInput" placeholder="如：王乐江" maxlength="8" autocomplete="off" spellcheck="false">
+    <input type="text" id="boxNameInput" placeholder="如：青衫客" maxlength="8" autocomplete="off" spellcheck="false">
     <div class="modal-actions">
       <button class="btn-cancel" id="btnBoxNameClear">清空</button>
       <button class="btn-danger" id="btnBoxNameConfirm">保存</button>
@@ -874,8 +874,7 @@ body.owner-open .tabbar{display:none}
 /* ---------- 常量与状态 ---------- */
 const API_BASE = 'https://letter.wanglejiang.top/chat/api';
 const LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 排除易混 0O1Il2Z5S8B
-const POLL_MS = 60000;          // 可见时轮询间隔（60秒，降低 Worker 调用）
-const POLL_MS_HIDDEN = 180000;  // 不可见时轮询间隔（3分钟，仅保活）
+const POLL_MS = 60000;  // 可见时轮询间隔（60秒）
 
 const state = {
   box: '',
@@ -1874,37 +1873,31 @@ async function togglePinSent(id) {
 }
 
 /* ============================================================
-   轮询调度 / visibilitychange
-   优化 Cloudflare 额度：可见60秒/不可见3分钟/切回立即拉取
+   轮询调度：仅在页面可见时轮询，不可见时停止，上线立即拉取
    ============================================================ */
 let pollTimer = null;
-let pollInterval = POLL_MS;
 function startPolling() {
   stopPolling();
-  pollInterval = document.visibilityState === 'visible' ? POLL_MS : POLL_MS_HIDDEN;
+  // 仅在页面可见时轮询
+  if (document.visibilityState !== 'visible') return;
   pollTimer = setInterval(() => {
-    // 可见时拉收件箱+发件箱；不可见时只拉收件箱（保活）
-    if (document.visibilityState === 'visible') {
-      fetchInbox();
-      // 仅当在发件页时才拉发件箱，减少不必要请求
-      if (state.tab === 'sent') fetchSent();
-    } else {
-      fetchInbox();
-    }
-  }, pollInterval);
+    fetchInbox();
+    // 仅在发件页时才拉发件箱，减少不必要请求
+    if (state.tab === 'sent') fetchSent();
+  }, POLL_MS);
 }
 function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    // 切回时立即拉取一次，然后重启轮询（用可见间隔）
+    // 回到页面：立即拉取一次，然后启动轮询
     fetchInbox();
     if (state.tab === 'sent') fetchSent();
     startPolling();
   } else {
-    // 不可见时降频轮询（保活，防止飞行中信件状态不更新）
-    startPolling();
+    // 离开页面：停止轮询
+    stopPolling();
   }
 });
 dom.btnRefreshInbox.addEventListener('click', fetchInbox);
@@ -2366,7 +2359,7 @@ async function lookupBoxName(box) {
     if (!res.ok) return;
     const data = await res.json();
     if (data.name) {
-      // 掩码显示：如"王乐江"→"**江"，"江"→"江"
+      // 掩码显示：如"青衫客"→"**客"，"客"→"客"
       const n = data.name;
       const masked = n.length <= 1 ? n : '*'.repeat(n.length - 1) + n.slice(-1);
       dom.toBoxNameHint.textContent = '对方名号：' + masked;
