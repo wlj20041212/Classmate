@@ -957,7 +957,7 @@ body.owner-open .tabbar{display:none}
 /* ---------- 常量与状态 ---------- */
 const API_BASE = 'https://letter.wanglejiang.top/chat/api';
 const LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 排除易混 0O1Il2Z5S8B
-const POLL_MS = 30000;  // 可见时轮询间隔（30秒）
+const POLL_MS = 15000;  // 可见时轮询间隔（15秒，get额度充足）
 
 const state = {
   box: '',
@@ -1457,7 +1457,7 @@ function loadLeaflet() {
 }
 
 // 预加载 Leaflet（页面加载后异步预取，不阻塞首屏）
-setTimeout(() => { loadLeaflet().catch(() => {}); }, 2000);
+setTimeout(() => { loadLeaflet().catch(() => {}); }, 200);
 
 /* 简笔鸽子 SVG（朝向右侧） */
 const PIGEON_SVG = `<svg viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
