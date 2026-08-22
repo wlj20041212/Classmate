@@ -491,17 +491,9 @@ async function handleOwnerBatchDelete(request, env) {
     let deleted = 0;
     for (const id of ids) {
       if (!id) continue;
-      // 读取信件，获取 from/to 用于清理索引
-      const raw = await env.MESSAGES.get(`msg:${id}`);
-      if (raw) {
-        const msg = JSON.parse(raw);
-        // 从索引中移除
-        if (msg.from) await indexRemove(env, `idx:sent:${msg.from}`, id);
-        if (msg.to) await indexRemove(env, `idx:inbox:${msg.to}`, id);
-        await indexRemove(env, 'idx:all', id);
-      }
-      // 删除信件本身
-      await env.MESSAGES.delete(`msg:${id}`);
+      // owner删除只从 idx:all 索引移除（owner后台不再显示）
+      // 不删除信件本身，不影响用户的收件箱/发件箱
+      await indexRemove(env, 'idx:all', id);
       deleted++;
     }
     return json({ ok: true, deleted });
