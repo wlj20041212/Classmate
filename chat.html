@@ -1160,8 +1160,22 @@ function requestGPS() {
       dom.gpsNoteText.textContent = '未取得定位，信鸽将只以倒计时飞抵';
       resolve(null);
     };
-    navigator.geolocation.getCurrentPosition(done, fail, { enableHighAccuracy: false, timeout: 6000, maximumAge: 120000 });
+    navigator.geolocation.getCurrentPosition(done, fail, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   });
+}
+
+// 页面加载时静默获取一次 GPS（用于收件箱补全 toGPS）
+function initGPS() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      lastGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      // 获取到定位后立即拉取一次收件箱，让 Worker 补全 toGPS
+      fetchInbox();
+    },
+    () => {},
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+  );
 }
 
 /* ---------- 写信：发送 ---------- */
@@ -1201,7 +1215,8 @@ async function sendMessage() {
   dom.btnSend.disabled = true;
   dom.btnSend.textContent = '正召' + animal.name + '…';
   try {
-    const fromGPS = await requestGPS();
+    // 优先用已有定位，没有才现场获取（避免发信时等10秒）
+    const fromGPS = lastGPS || await requestGPS();
     const res = await fetch(`${API_BASE}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2536,6 +2551,7 @@ dom.btnOwnerBack.addEventListener('click', () => {
   loadAnimals();
   loadNames();
   loadMyName();
+  initGPS();  // 静默获取定位，用于收件箱补全 toGPS
   dom.customTime.value = toLocalInput(new Date(Date.now() + 24 * 3600 * 1000));
   renderMessengerBar();
   // URL 参数：?box=XXX 自动填收件人
