@@ -593,6 +593,7 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 .messenger-item .ms-svg{width:48px;height:48px}
 .messenger-item .ms-name{font-size:11px;color:var(--ink-soft);font-family:var(--kai);letter-spacing:.04em;white-space:nowrap}
 .messenger-item .ms-count{position:absolute;top:4px;right:4px;font-size:9px;background:var(--cinnabar);color:var(--paper);border-radius:8px;padding:0 5px;line-height:14px}
+.messenger-item .ms-uses{font-size:9px;color:var(--ink-soft);font-family:var(--kai);letter-spacing:.04em;line-height:1;margin-top:-2px;opacity:.85}
 
 /* 发送时飞行动画 */
 .fly-launch{
@@ -972,6 +973,7 @@ const state = {
   customChosen: false,
   sentinel: 0,
   animals: {},         // 动物库存 {id:count}
+  uses: {},            // 信使使用次数 {id:remaining_uses}
   currentAnimal: 'dove', // 当前选中信使
   names: {},            // 自定义名号 {id:name}
   expandedInbox: new Set(), // 收件箱展开的信件ID（防轮询刷新收起）
@@ -1400,11 +1402,12 @@ async function sendMessage() {
     dom.msgContent.value = '';
     dom.charCount.textContent = '0/500';
     if (willDie) {
-      // 消耗一只信使（阵亡）
-      consumeAnimal(animal.id);
+      // 殒命：扣1只信使（阵亡）
+      consumeDead(animal.id);
       setTimeout(() => toast(animal.name + '「' + (petName || '无名') + '」前途凶险…', true), 1400);
     } else {
-      consumeAnimal(animal.id);
+      // 正常发信：扣1次使用次数（不扣信使数量）
+      consumeUse(animal.id);
     }
     if (to === state.box) { setTimeout(() => fetchInbox(), 500); }
   } catch (e) {
@@ -2016,10 +2019,9 @@ function renderSent() {
           });
           if (!res.ok) throw new Error();
           m.status = 'recalled';
-          // 召回信使：归还一只信使（发信时已消耗）
-          if (m.animal) addAnimal(m.animal, 1);
+          // 召回信使：发信时只扣了使用次数，未扣信使数量，无需归还
           renderSent();
-          toast('信使已召回，已归还');
+          toast('信使已召回');
         } catch (e) { toast('飞鸽疲惫，稍后再试'); }
       });
       act.appendChild(rb);
@@ -2249,12 +2251,12 @@ document.addEventListener('DOMContentLoaded', () => {
    信使 · 动物系统
    ============================================================ */
 const ANIMALS = {
-  dove:   { id:'dove',   name:'灰鸽', rarity:'普通', speed:1.0, death:0.22, desc:'朴实而常殒于途', body:'#9ca3af', wing:'#6b7280', type:'normal' },
-  swallow:{ id:'swallow',name:'燕子', rarity:'普通', speed:1.3, death:0.28, desc:'疾飞而命薄', body:'#4b5563', wing:'#1f2937', type:'swallow' },
-  eagle:  { id:'eagle',  name:'苍鹰', rarity:'稀有', speed:1.6, death:0.12, desc:'猛捷而招祸', body:'#92400e', wing:'#451a03', type:'eagle' },
-  white:  { id:'white',  name:'白鸽', rarity:'史诗', speed:1.5, death:0.06, desc:'纯善守信，罕有陨落', body:'#f3f4f6', wing:'#d1d5db', type:'normal' },
-  goose:  { id:'goose',  name:'鸿雁', rarity:'史诗', speed:1.7, death:0.05, desc:'稳健远行，万里不殆', body:'#a16207', wing:'#78350f', type:'goose' },
-  blue:   { id:'blue',   name:'青鸟', rarity:'传说', speed:2.0, death:0.00, desc:'神鸟通灵，永陨不坠', body:'#0e7490', wing:'#0891b2', type:'bluebird' }
+  dove:   { id:'dove',   name:'灰鸽', rarity:'普通', speed:1.0, death:0.22, desc:'朴实而常殒于途', body:'#9ca3af', wing:'#6b7280', type:'normal',   maxUses:2 },
+  swallow:{ id:'swallow',name:'燕子', rarity:'普通', speed:1.3, death:0.28, desc:'疾飞而命薄', body:'#4b5563', wing:'#1f2937', type:'swallow', maxUses:2 },
+  eagle:  { id:'eagle',  name:'苍鹰', rarity:'稀有', speed:1.6, death:0.12, desc:'猛捷而招祸', body:'#92400e', wing:'#451a03', type:'eagle',   maxUses:4 },
+  white:  { id:'white',  name:'白鸽', rarity:'史诗', speed:1.5, death:0.06, desc:'纯善守信，罕有陨落', body:'#f3f4f6', wing:'#d1d5db', type:'normal', maxUses:6 },
+  goose:  { id:'goose',  name:'鸿雁', rarity:'史诗', speed:1.7, death:0.05, desc:'稳健远行，万里不殆', body:'#a16207', wing:'#78350f', type:'goose',   maxUses:6 },
+  blue:   { id:'blue',   name:'青鸟', rarity:'传说', speed:2.0, death:0.00, desc:'神鸟通灵，永陨不坠', body:'#0e7490', wing:'#0891b2', type:'bluebird',maxUses:10 }
 };
 const ANI_ORDER = ['dove','swallow','eagle','white','goose','blue'];
 const NAME_POOL = ['墨翎','云翼','逐月','乘风','破晓','听雪','渡星','栖霞','凌川','望舒','衔枝','归鸿','振羽','穿林','映霜','逐光','落梅','栖云','踏雪','鸣涧'];
@@ -2287,14 +2289,29 @@ function loadAnimals(){
   try { a = JSON.parse(localStorage.getItem('pigeon_animals') || '{}'); } catch(e){}
   if(!a.dove) a.dove = 3; // 默认送3只灰鸽
   state.animals = a;
+  // 读取使用次数（刷新不丢）
+  let u = {};
+  try { u = JSON.parse(localStorage.getItem('pigeon_uses') || '{}'); } catch(e){}
+  state.uses = u;
   let cur = localStorage.getItem('pigeon_current_animal');
   if(!cur || !a[cur]) cur = 'dove';
   state.currentAnimal = cur;
+  // 初始化/修正使用次数：拥有但无次数记录 → 设为满次数；不拥有则清零
+  ANI_ORDER.forEach(id => {
+    if (a[id] > 0) {
+      if (!u[id] || u[id] <= 0) u[id] = ANIMALS[id].maxUses;
+    } else {
+      u[id] = 0;
+    }
+  });
+  state.uses = u;
   localStorage.setItem('pigeon_animals', JSON.stringify(a));
+  localStorage.setItem('pigeon_uses', JSON.stringify(u));
   localStorage.setItem('pigeon_current_animal', cur);
 }
 function saveAnimals(){
   localStorage.setItem('pigeon_animals', JSON.stringify(state.animals));
+  localStorage.setItem('pigeon_uses', JSON.stringify(state.uses || {}));
 }
 function loadNames(){
   let n = {};
@@ -2309,19 +2326,52 @@ function animalDisplay(id){
   if(!a) return '未知';
   return a.name + (state.names[id] ? '（' + state.names[id] + '）' : '');
 }
-function consumeAnimal(id){
+// 发信消耗：扣1次使用次数（不扣信使数量）
+function consumeUse(id){
+  if(!state.uses[id] || state.uses[id] <= 0){
+    // 无次数记录但有信使 → 初始化为满次数-1
+    if(state.animals[id] > 0) state.uses[id] = ANIMALS[id].maxUses - 1;
+  } else {
+    state.uses[id]--;
+  }
+  // 次数用完：1只信使退休
+  if(state.uses[id] <= 0){
+    state.animals[id]--;
+    if(state.animals[id] <= 0){
+      delete state.animals[id];
+      state.uses[id] = 0;
+      if(state.currentAnimal === id) state.currentAnimal = 'dove';
+      if(!state.animals.dove) state.animals.dove = 1; // 保底送1只灰鸽
+      if(!state.uses.dove) state.uses.dove = ANIMALS.dove.maxUses;
+      localStorage.setItem('pigeon_current_animal', state.currentAnimal);
+    } else {
+      // 还有信使，重置次数为新信使的满次数
+      state.uses[id] = ANIMALS[id].maxUses;
+    }
+  }
+  saveAnimals();
+  if(state.tab === 'animal') renderAnimals();
+  if(dom.messengerBar) renderMessengerBar();
+}
+// 殒命消耗：扣1只信使（次数不变，殒命的信使带走了它的剩余次数）
+function consumeDead(id){
   if(state.animals[id] > 0) state.animals[id]--;
   if(state.animals[id] <= 0){
     delete state.animals[id];
+    state.uses[id] = 0;
     if(state.currentAnimal === id) state.currentAnimal = 'dove';
     if(!state.animals.dove) state.animals.dove = 1; // 保底送1只灰鸽
+    if(!state.uses.dove) state.uses.dove = ANIMALS.dove.maxUses;
     localStorage.setItem('pigeon_current_animal', state.currentAnimal);
   }
   saveAnimals();
   if(state.tab === 'animal') renderAnimals();
+  if(dom.messengerBar) renderMessengerBar();
 }
 function addAnimal(id, n=1){
   state.animals[id] = (state.animals[id]||0) + n;
+  // 新增信使时，若该类型无次数记录或为0，初始化为满次数
+  if(!state.uses[id] || state.uses[id] <= 0) state.uses[id] = ANIMALS[id].maxUses;
   saveAnimals();
 }
 function pickName(){
@@ -2429,6 +2479,7 @@ function renderAnimals(){
   ANI_ORDER.forEach(id => {
     const a = ANIMALS[id];
     const count = state.animals[id] || 0;
+    const uses = state.uses && state.uses[id] ? state.uses[id] : 0;
     const locked = count <= 0;
     const card = document.createElement('div');
     card.className = 'animal-card' + (locked?' locked':'');
@@ -2440,7 +2491,7 @@ function renderAnimals(){
       <div class="ani-svg">${animalSvg(id)}</div>
       <div class="ani-name">${esc(display)}</div>
       <div class="ani-pet">${a.desc}</div>
-      <div class="ani-stats"><span>速<b>×${a.speed}</b></span><span>陨<b>${Math.round(a.death*100)}%</b></span></div>
+      <div class="ani-stats"><span>速<b>×${a.speed}</b></span><span>陨<b>${Math.round(a.death*100)}%</b></span>${count>0?`<span>余<b>${uses}/${a.maxUses}</b></span>`:''}</div>
       <button class="ani-select">${locked?'未拥有':'取名'}</button>`;
     if(!locked){
       card.addEventListener('click', () => {
@@ -2489,6 +2540,7 @@ function renderMessengerBar(){
   ANI_ORDER.forEach(id => {
     const a = ANIMALS[id];
     const count = state.animals[id] || 0;
+    const uses = state.uses && state.uses[id] ? state.uses[id] : 0;
     const locked = count <= 0;
     const cur = state.currentAnimal === id;
     const item = document.createElement('div');
@@ -2496,7 +2548,8 @@ function renderMessengerBar(){
     item.innerHTML = `
       ${count>0?`<span class="ms-count">${count}</span>`:''}
       <div class="ms-svg">${animalSvg(id)}</div>
-      <div class="ms-name">${esc(a.name)}${state.names[id]?'<br>('+esc(state.names[id])+')':''}</div>`;
+      <div class="ms-name">${esc(a.name)}${state.names[id]?'<br>('+esc(state.names[id])+')':''}</div>
+      ${count>0?`<div class="ms-uses">余${uses}次</div>`:''}`;
     if(!locked){
       item.addEventListener('click', () => {
         state.currentAnimal = id;
@@ -2529,13 +2582,13 @@ function checkAdReward(){
   if(info.rewarded){ return; }
   const elapsed = Date.now() - info.start;
   if(elapsed < 4000){ return; } // 未满5秒，不发奖励
-  // 结算：随机获得一只（白鸽/苍鹰低概率）
+  // 结算：随机获得一只（降低稀有和史诗概率）
   const r = Math.random();
   let getId;
-  if(r < 0.40) getId = 'goose';
-  else if(r < 0.72) getId = 'swallow';
-  else if(r < 0.88) getId = 'white';
-  else getId = 'eagle';
+  if(r < 0.50) getId = 'swallow';       // 燕子(普通) 50%
+  else if(r < 0.80) getId = 'goose';    // 鸿雁(史诗) 30%
+  else if(r < 0.93) getId = 'eagle';    // 苍鹰(稀有) 13%
+  else getId = 'white';                 // 白鸽(史诗) 7%
   addAnimal(getId, 1);
   info.rewarded = true;
   localStorage.setItem('pigeon_ad', JSON.stringify(info));
