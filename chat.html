@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -725,6 +725,7 @@ body.owner-open .tabbar{display:none}
         <input id="toBox" type="text" maxlength="6" placeholder="六位信箱号" autocomplete="off" autocapitalize="characters" spellcheck="false">
       </div>
       <div class="box-name-hint" id="toBoxNameHint" style="font-size:12px;color:var(--ink-faint);margin-top:4px;min-height:16px"></div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;opacity:.85">发送后可去收发页展开信件，给联系人添加备注</div>
     </div>
     <div class="field">
       <label class="field-label" for="msgContent"><b>*</b>鸿雁捎话</label>
@@ -1814,7 +1815,7 @@ function buildInboxItem(m) {
   if (fromBox) {
     const btnRemark = document.createElement('button');
     btnRemark.className = 'btn-recalled';
-    btnRemark.textContent = getRemark(fromBox) ? '改备注' : '备注';
+    btnRemark.textContent = getRemark(fromBox) ? '改备注' : '备注联系人';
     btnRemark.addEventListener('click', (e) => { e.stopPropagation(); promptRemark(fromBox); });
     act.appendChild(btnRemark);
   }
@@ -1899,16 +1900,50 @@ function remarkLabel(box, fallback) {
   const r = getRemark(box);
   return r ? r + '（' + box + '）' : box;
 }
-// 备注/编辑弹窗
+// 备注/编辑弹窗（仿古雅致弹层，替代原生 prompt）
 function promptRemark(box) {
   if (!box) return;
   const cur = getRemark(box);
-  const input = prompt('为信箱 ' + box + ' 设置备注（留空清除）：', cur);
-  if (input === null) return; // 取消
-  const name = input.trim();
-  setRemark(box, name);
-  toast(name ? '备注已保存：' + name : '备注已清除');
-  renderInbox(); renderSent();
+  // 移除旧弹层
+  document.getElementById('remarkOverlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'remarkOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(60,45,30,.42);z-index:9000;display:flex;align-items:center;justify-content:center;padding:24px';
+  overlay.innerHTML = `
+    <div style="background:var(--paper,#f7f2e7);border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.28);max-width:340px;width:100%;padding:20px 18px 16px;font-family:var(--kai,inherit);position:relative">
+      <div style="font-size:16px;font-weight:700;color:var(--ink,#4a3a2a);letter-spacing:.08em;margin-bottom:4px">备注联系人</div>
+      <div style="font-size:12px;color:var(--ink-faint,#9a8a72);margin-bottom:12px">信箱 ${esc(box)} · 备注仅保存在你的本机</div>
+      <input id="remarkInput" type="text" maxlength="12" placeholder="如：张同学（最多12字）"
+        style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--paper-line,#d8cdb8);border-radius:8px;font-size:15px;background:#fffdf8;color:var(--ink,#4a3a2a);outline:none;font-family:inherit"
+        value="${esc(cur)}">
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button id="remarkCancel" style="flex:1;padding:9px 0;border:1px solid var(--paper-line,#d8cdb8);background:transparent;border-radius:8px;font-size:14px;color:var(--ink-soft,#6b5b45);cursor:pointer;font-family:inherit">取消</button>
+        <button id="remarkClear" style="flex:1;padding:9px 0;border:1px solid var(--paper-line,#d8cdb8);background:transparent;border-radius:8px;font-size:14px;color:var(--ink-faint,#9a8a72);cursor:pointer;font-family:inherit">清除</button>
+        <button id="remarkOk" style="flex:1.2;padding:9px 0;border:none;background:var(--cinnabar,#b3432b);color:#fff;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit">保存</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector('#remarkInput');
+  setTimeout(() => input.focus(), 50);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('#remarkCancel').addEventListener('click', close);
+  overlay.querySelector('#remarkClear').addEventListener('click', () => {
+    setRemark(box, '');
+    toast('备注已清除');
+    close();
+    renderInbox(); renderSent();
+  });
+  overlay.querySelector('#remarkOk').addEventListener('click', () => {
+    const name = input.value.trim();
+    setRemark(box, name);
+    toast(name ? '备注已保存：' + name : '备注已清除');
+    close();
+    renderInbox(); renderSent();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') overlay.querySelector('#remarkOk').click();
+  });
 }
 
 /* 收件箱：删除（仅自己页面，调 Worker 删 inbox 索引） */
@@ -2073,7 +2108,7 @@ function renderSent() {
       if (m.to) {
         const btnRemark = document.createElement('button');
         btnRemark.className = 'btn-recalled';
-        btnRemark.textContent = getRemark(m.to) ? '改备注' : '备注';
+        btnRemark.textContent = getRemark(m.to) ? '改备注' : '备注联系人';
         btnRemark.addEventListener('click', (e) => { e.stopPropagation(); promptRemark(m.to); });
         act.appendChild(btnRemark);
       }
@@ -2125,7 +2160,7 @@ function renderSent() {
       if (m.to) {
         const btnRemark = document.createElement('button');
         btnRemark.className = 'btn-recalled';
-        btnRemark.textContent = getRemark(m.to) ? '改备注' : '备注';
+        btnRemark.textContent = getRemark(m.to) ? '改备注' : '备注联系人';
         btnRemark.addEventListener('click', (e) => { e.stopPropagation(); promptRemark(m.to); });
         actBox.appendChild(btnRemark);
       }
