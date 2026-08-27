@@ -1191,18 +1191,26 @@ function renderSavedJianzhu(){
 // 构建提示词：标题+体式+公元纪年+注释+诗句
 function buildPrompt(p, task){
   const year = String(p.create).slice(0,4);
-  // 体式描述：格律诗标注体式，"古诗"统一称"古风诗"
-  const genreDesc = p.genre === '古诗' ? '古风诗（非格律诗，不拘平仄对仗）' : p.genre;
-  let s = '请看这首' + genreDesc + '：\n';
+  // 体式分类：词/古诗非格律诗，其余（五绝/七律等）为格律诗
+  const isWord = p.genre === '词';
+  const isOld = p.genre === '古诗';
+  const genreDesc = isWord ? '词（倚声填词，按词牌格律，非格律诗）'
+    : (isOld ? '古风诗（非格律诗，不拘平仄对仗）' : p.genre);
+  let s = isWord ? '请看这阕词：\n' : '请看这首' + genreDesc + '：\n';
   s += '标题：' + p.title + '\n';
   s += '体式：' + genreDesc + '\n';
   s += '创作时间：' + p.createLabel + '（公元' + year + '年）\n';
   if(p.note) s += '注释：' + p.note + '\n';
   if(p.epigraph) s += '题记：' + p.epigraph + '\n';
   s += '\n' + p.lines.join('\n') + '\n\n';
+  // 评诗注意：按实际体裁评价，禁止张冠李戴
+  let reviewNote;
+  if(isWord)      reviewNote = '这是一阕词，不是格律诗。请按词的规范点评（词牌句式、长短句错落、音律意境），不要称它为诗/绝句/律诗，更不要按近体诗平仄对仗去评判。';
+  else if(isOld)  reviewNote = '这是古风诗，不是格律诗。不要用绝句/律诗称呼它，也不要按格律平仄对仗去评判。';
+  else            reviewNote = '这是' + p.genre + '，属格律诗，可按平仄对仗要求点评。';
   s += task === 'trans'
-    ? '请把这首' + genreDesc + '翻译成现代白话文，只输出中文白话文翻译，不要输出英文或其他语言，不要额外解释。'
-    : '请点评这首' + genreDesc + '。注意：这是' + (p.genre === '古诗' ? '古风诗，不是格律诗，不要用绝句/律诗称呼它，也不要按格律平仄去评判' : '格律诗') + '。';
+    ? '请把这首' + (isWord ? '词' : genreDesc) + '翻译成现代白话文，只输出中文白话文翻译，不要输出英文或其他语言，不要额外解释。'
+    : '请点评这首' + (isWord ? '词' : genreDesc) + '。注意：' + reviewNote;
   return s;
 }
 
