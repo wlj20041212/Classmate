@@ -374,10 +374,49 @@ footer{
 
 /* ===== Responsive ===== */
 @media (max-width:640px){
-  .poem-date{margin-left:0;width:100%}
+  /* 顶部压缩：横向排版，减小字号与留白 */
+  .hero{
+    padding:24px 0 18px;
+    grid-template-columns:1fr auto;
+    gap:14px;
+  }
+  .hero-kicker{font-size:0.7rem;letter-spacing:0.3em;margin-bottom:6px}
+  .hero-title{font-size:clamp(1.6rem,6vw,2.2rem);letter-spacing:0.06em}
+  .hero-sub{margin-top:8px;font-size:0.82rem;line-height:1.6;max-width:none}
+  .hero-stats{margin-top:12px;gap:14px}
+  .stat b{font-size:1.2rem}
+  .stat span{font-size:0.66rem;letter-spacing:0.14em}
+  .seal{width:56px;height:56px;border-width:2px}
+  .seal-text{font-size:0.78rem;letter-spacing:0.04em}
+  .author-nav{margin-top:12px;gap:6px}
+  .author-link{padding:5px 12px;font-size:0.78rem}
+  /* 工具栏压缩 */
+  .toolbar{padding:10px 0 8px;margin-bottom:4px}
+  .search-row{gap:8px;margin-bottom:8px;flex-wrap:nowrap}
+  .search-box input{padding:7px 2px 6px 26px;font-size:0.88rem}
+  .result-count{font-size:0.74rem}
+  .sort-btn{padding:5px 10px;font-size:0.76rem;letter-spacing:0.04em}
+  .filter-label{margin:6px 0 5px;font-size:0.66rem;letter-spacing:0.18em}
+  .chips{gap:5px}
+  .chip{padding:4px 10px;font-size:0.76rem;letter-spacing:0.02em;line-height:1.3}
+  /* 诗列表压缩 */
+  .poem-list{padding:6px 0 60px}
+  .poem{padding:14px 0 12px}
+  .poem-head{gap:5px 10px;margin-bottom:4px}
+  .poem-no{font-size:0.72rem}
+  .poem-title{font-size:clamp(1.1rem,4vw,1.3rem);letter-spacing:0.04em}
+  .poem-genre{font-size:0.68rem;padding:1px 7px;letter-spacing:0.1em}
+  /* 日期横向内联，不再独占一行 */
+  .poem-date{margin-left:auto;font-size:0.74rem;width:auto}
+  .poem-epigraph{margin:4px 0 8px;font-size:0.78rem;padding-left:0.9em}
+  .poem-body{padding:4px 0 2px}
+  .poem-body p{font-size:clamp(0.95rem,3vw,1.05rem);line-height:1.75;letter-spacing:0.02em;margin-bottom:1px}
+  .poem-note{margin-top:8px;font-size:0.76rem;line-height:1.65}
+}
+@media (max-width:380px){
+  .hero-stats{flex-wrap:wrap;gap:10px 16px}
   .search-row{flex-wrap:wrap}
   .result-count{margin-left:auto}
-  .sort-btn{padding:7px 12px;font-size:0.8rem}
 }
 
 /* ===== Reduced motion ===== */
@@ -462,6 +501,7 @@ const AUTHORS = {
     seal: '退安<br>诗词',
     sealTitle: '退安诗词',
     poems: [
+      {"title":"古箫吟风曲有感","genre":"五绝","create":"2026-08-26","createLabel":"2026年08月26日","lines":["沉箫掠水间，","似起玉壶圆。","苍岭云痕淡，","粼光倒碧天。"],"note":"沉箫：音色低沉、悠长厚重的箫声；掠水：箫声轻轻拂过水面，贴着水波回荡；玉壶：此处代指水面一圈圈圆润透亮的涟漪。","epigraph":"宣德六年七月十三日十四时十一分作"},
       {"title":"无题","genre":"古诗","create":"2026-06-11","createLabel":"2026年06月11日","lines":["春来雁知归，永逝莫能回。","去者犹余念，山风入梦随。","但悲泉路远，冷月照寒闺。","千树花零落，空教稚子追。"],"note":"","epigraph":""},
       {"title":"无题","genre":"七绝","create":"2026-05-06","createLabel":"2026年05月06日","lines":["唯见晴光铺野开，爱随新燕过桥来。","子规声懒斜阳暖，文杏浮香入露台。"],"note":"宣德六年三月二十日作","epigraph":"赠子文，宣德六年三月二十日作"},
       {"title":"清明归乡","genre":"七律","create":"2026-04-07","createLabel":"2026年04月07日","lines":["门前桃树花如旧，陌上荒蹊草自青。","屋畔新居春寂寂，杏阴老院月冥冥。","风来似送书声近，蜂落唯怜香蕊轻。","常记儿时深夜雨，一宵清冷到天明。"],"note":"","epigraph":"宣德六年二月二十日作"},
@@ -546,7 +586,7 @@ const authorNav = document.getElementById('authorNav');
 const backBtn = document.getElementById('backBtn');
 const footLeft = document.getElementById('footLeft');
 
-let state = { q:'', genre:'all', year:'all', asc:true };
+let state = { q:'', genre:'all', year:'all', asc:false };
 let POEMS = [];
 
 function getCurrentAuthor(){
@@ -560,6 +600,12 @@ function esc(s){
 }
 
 function genreClass(g){ return ['七绝','五绝','七律','五律'].includes(g) ? 'lv' : ''; }
+
+// 按 create 时间正序排（最老→最新），相同时间则保留原数据顺序
+function sortByTimeAsc(poems){
+  return poems.map((p,i)=>Object.assign({}, p, {_i:i}))
+    .sort((a,b)=> a.create.localeCompare(b.create) || (a._i - b._i));
+}
 
 function applyAuthor(){
   const a = getCurrentAuthor();
@@ -577,14 +623,16 @@ function applyAuthor(){
     return '<a class="author-link" href="#a='+id+'" data-id="'+id+'">'+o.name+'诗词</a>';
   }).join('');
 
-  // 重置筛选与搜索
-  state = { q:'', genre:'all', year:'all', asc:true };
+  // 重置筛选与搜索（默认逆序：最近在前）
+  state = { q:'', genre:'all', year:'all', asc:false };
   searchEl.value = '';
-  sortBtn.textContent = '时间 ↑';
+  sortBtn.textContent = '时间 ↓';
   document.querySelectorAll('#genreChips .chip').forEach(c=>c.classList.toggle('active', c.dataset.genre==='all'));
   document.querySelectorAll('#yearChips .chip').forEach(c=>c.classList.toggle('active', c.dataset.year==='all'));
 
-  POEMS = a.poems.map((p,i)=>Object.assign({no:i+1}, p));
+  // 按时间正序赋编号：最老的为1，最新的为最大
+  const sorted = sortByTimeAsc(a.poems);
+  POEMS = sorted.map((p,i)=>{ const {_i, ...rest} = p; return Object.assign({no:i+1}, rest); });
 
   // 统计
   const footTotal = document.getElementById('footTotal');
@@ -609,6 +657,12 @@ function render(){
     return true;
   });
 
+  // 1. 先按时间正序赋 displayNo（最老的为1，最新的为最大）
+  //    ——这样筛选模式下也能连续编号，不再跳号
+  filtered = filtered.slice().sort((a,b)=> a.create.localeCompare(b.create) || a.no - b.no)
+    .map((p,i)=>Object.assign({}, p, {displayNo:i+1}));
+
+  // 2. 再按用户期望的展示顺序排（默认逆序：最近在前）
   filtered.sort((a,b)=>{
     const d = state.asc ? a.create.localeCompare(b.create) : b.create.localeCompare(a.create);
     if(d!==0) return d;
@@ -628,7 +682,7 @@ function render(){
     const note = p.note ? '<div class="poem-note"><span class="note-mark">注</span>'+esc(p.note)+'</div>' : '';
     return '<article class="poem" style="animation-delay:'+Math.min(i*45,360)+'ms">'
       + '<div class="poem-head">'
-      + '<span class="poem-no">' + String(p.no).padStart(2,'0') + '</span>'
+      + '<span class="poem-no">' + String(p.displayNo).padStart(2,'0') + '</span>'
       + '<h2 class="poem-title">' + esc(p.title) + '</h2>'
       + '<span class="poem-genre '+genreClass(p.genre)+'">' + esc(p.genre) + '</span>'
       + '<span class="poem-date">' + esc(p.createLabel) + '</span>'
