@@ -940,9 +940,13 @@ const AI_SYSTEM_PROMPT = '你是一位精通古典诗词的学者，擅长诗词
 
 let currentDetail = null; // 当前详情诗对象
 
-// 简易 Markdown 渲染（加粗/换行）
+// 简易 Markdown 渲染（加粗/换行，去除#号标题等残留符号）
 function renderMdLite(text){
   let h = esc(text);
+  // 行首 # 号标题（AI常输出）：去掉#号，保留标题文字
+  h = h.replace(/^#{1,6}\s*/gm, '');
+  // 行首 - 或 * 的列表符号
+  h = h.replace(/^[\s]*[-*]\s+/gm, '');
   h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   return h;
@@ -992,10 +996,11 @@ function showDetail(no){
     + '<div class="detail-body">' + linesHtml + '</div>'
     + note
     + '<div class="detail-actions">'
-    + '<button class="action-btn" type="button" id="btnTrans">译 · 翻译</button>'
-    + '<button class="action-btn" type="button" id="btnReview">鉴 · AI评诗</button>'
-    + '<button class="action-btn" type="button" id="btnNote">笺 · 笺注</button>'
+    + '<button class="action-btn" type="button" id="btnTrans" title="点击显示，再点隐藏">译 · 翻译</button>'
+    + '<button class="action-btn" type="button" id="btnReview" title="点击显示，再点隐藏">鉴 · AI评诗</button>'
+    + '<button class="action-btn" type="button" id="btnNote" title="点击显示，再点隐藏">笺 · 笺注</button>'
     + '</div>'
+    + '<p class="list-hint" style="margin-top:12px">点击上方按钮展开，再点一次即可收起</p>'
     + '<div class="detail-output" id="detailOutput"></div>';
 
   document.getElementById('detailBack').addEventListener('click', ()=>{
@@ -1104,46 +1109,56 @@ function errorBox(box){
     '<span class="ai-error">⚠️ 乐江AI繁忙，请稍后重试~</span>';
 }
 
-// 翻译：有固定翻译用固定，否则本地缓存，再否则调AI
+// 翻译：再点隐藏；有固定翻译用固定，否则本地缓存，再否则调AI
 async function doTrans(){
   const p = currentDetail; if(!p) return;
-  const box = ensureBox('trans', '译');
   const btn = document.getElementById('btnTrans');
+  const existing = document.getElementById('box-trans');
+  // toggle：已显示则隐藏
+  if(existing && existing.dataset.loaded === '1'){ existing.remove(); btn.classList.remove('active'); return; }
+
+  const box = ensureBox('trans', '译');
   btn.classList.add('active');
 
-  if(p.trans){ fillBox(box, p.trans, '定译'); return; }
+  if(p.trans){ fillBox(box, p.trans, '定译'); box.dataset.loaded = '1'; return; }
 
   const cacheKey = detailCacheKey('trans');
   const cached = localStorage.getItem(cacheKey);
-  if(cached){ fillBox(box, cached, '已缓存'); return; }
+  if(cached){ fillBox(box, cached, '已缓存'); box.dataset.loaded = '1'; return; }
 
   loadingBox(box, '乐江AI正在翻译…');
   try{
     const reply = await callPoemAI(buildPrompt(p, 'trans'));
     localStorage.setItem(cacheKey, reply);
     fillBox(box, reply, '乐江AI');
+    box.dataset.loaded = '1';
   }catch(e){
     errorBox(box);
     btn.classList.remove('active');
   }
 }
 
-// AI评诗：本地缓存优先
+// AI评诗：再点隐藏；本地缓存优先
 async function doReview(){
   const p = currentDetail; if(!p) return;
-  const box = ensureBox('review', '鉴');
   const btn = document.getElementById('btnReview');
+  const existing = document.getElementById('box-review');
+  // toggle：已显示则隐藏
+  if(existing && existing.dataset.loaded === '1'){ existing.remove(); btn.classList.remove('active'); return; }
+
+  const box = ensureBox('review', '鉴');
   btn.classList.add('active');
 
   const cacheKey = detailCacheKey('review');
   const cached = localStorage.getItem(cacheKey);
-  if(cached){ fillBox(box, cached, '已缓存'); return; }
+  if(cached){ fillBox(box, cached, '已缓存'); box.dataset.loaded = '1'; return; }
 
   loadingBox(box, '乐江AI正在赏评…');
   try{
     const reply = await callPoemAI(buildPrompt(p, 'review'));
     localStorage.setItem(cacheKey, reply);
     fillBox(box, reply, '乐江AI');
+    box.dataset.loaded = '1';
   }catch(e){
     errorBox(box);
     btn.classList.remove('active');
