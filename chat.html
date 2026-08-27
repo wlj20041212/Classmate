@@ -1704,22 +1704,23 @@ function buildInboxItem(m) {
 
   const head = document.createElement('div');
   head.className = 'msg-head';
-  // 发件人显示：有信箱号则查名号（掩码显示最后一位），无则显示"无名氏"
+  // 发件人显示：优先备注（备注（信箱号）），其次名号掩码，最后信箱号
   const fromBox = m.from || '';
+  const fromRemark = getRemark(fromBox);
   const fromNameId = 'fromname-' + m.id;
   head.innerHTML = `
     <span class="msg-status-dot"></span>
     <div>
-      <div class="msg-from"><span id="${fromNameId}">${esc(fromBox || '无名氏')}</span>${m.animal ? '<span class="pet-name">' + esc((ANIMALS[m.animal]||ANIMALS.dove).name) + (m.petName ? '·' + esc(m.petName) : '') + '</span>' : ''}</div>
-      <div class="msg-who">${fromBox ? '来自信箱 ' + esc(fromBox) : ''}</div>
+      <div class="msg-from"><span id="${fromNameId}">${esc(fromRemark ? remarkLabel(fromBox) : (fromBox || '无名氏'))}</span>${m.animal ? '<span class="pet-name">' + esc((ANIMALS[m.animal]||ANIMALS.dove).name) + (m.petName ? '·' + esc(m.petName) : '') + '</span>' : ''}</div>
+      <div class="msg-who">${fromBox ? (fromRemark ? '来自信箱 ' + esc(fromBox) + ' · ' + esc(fromRemark) : '来自信箱 ' + esc(fromBox)) : ''}</div>
     </div>
     <div class="msg-right">
       <span class="msg-badge ${m.status}">${statusText(m.status)}</span>
       <span class="msg-time">${m.createdAt ? formatShort(m.createdAt) : ''}</span>
     </div>`;
   item.appendChild(head);
-  // 异步查询发件人名号（掩码显示最后一位）
-  if (fromBox) {
+  // 异步查询发件人名号（掩码显示最后一位）——仅无备注时
+  if (fromBox && !fromRemark) {
     fetchBoxNameMasked(fromBox).then((masked) => {
       const el = document.getElementById(fromNameId);
       if (el && masked) el.textContent = masked;
@@ -1788,7 +1789,7 @@ function buildInboxItem(m) {
     body.innerHTML = `
       <div class="paper">
         <div class="content">${esc(m.content || '')}</div>
-        <div class="colophon">${m.from || ''} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
+        <div class="colophon">${esc(remarkLabel(m.from || ''))} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
         ${m.status === 'read' && m.readAt ? `<div class="read-note">已展阅 · ${formatShort(m.readAt)}</div>` : ''}
       </div>`;
     detail.appendChild(body);
@@ -1809,6 +1810,14 @@ function buildInboxItem(m) {
   btnPin.textContent = m.pinned ? '取消置顶' : '置顶';
   btnPin.addEventListener('click', (e) => { e.stopPropagation(); togglePinInbox(m.id); });
   act.appendChild(btnPin);
+  // 备注：给发件信箱加备注（本地缓存，所有信件通用）
+  if (fromBox) {
+    const btnRemark = document.createElement('button');
+    btnRemark.className = 'btn-recalled';
+    btnRemark.textContent = getRemark(fromBox) ? '改备注' : '备注';
+    btnRemark.addEventListener('click', (e) => { e.stopPropagation(); promptRemark(fromBox); });
+    act.appendChild(btnRemark);
+  }
   // 收件方对所有状态均可删除（含飞行中）
   const btnDel = document.createElement('button');
   btnDel.className = 'btn-recalled';
@@ -1843,7 +1852,7 @@ function buildInboxItem(m) {
           body.innerHTML = `
             <div class="paper">
               <div class="content">${esc(m.content || '')}</div>
-              <div class="colophon">${m.from || ''} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
+              <div class="colophon">${esc(remarkLabel(m.from || ''))} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
               <div class="read-note">已展阅 · ${formatShort(Date.now())}</div>
             </div>`;
           oldBody.replaceWith(body);
@@ -1865,6 +1874,41 @@ function buildInboxItem(m) {
 }
 function statusText(s) {
   return { flying: '飞行中', delivered: '已送达', read: '已读', recalled: '已召回', dead: '信使殒命' }[s] || s;
+}
+
+/* ============================================================
+   信箱备注（本地缓存，仅存于本机）
+   ============================================================ */
+const REMARK_KEY = 'pigeon_box_remarks';
+function getRemarks() {
+  try { return JSON.parse(localStorage.getItem(REMARK_KEY) || '{}'); } catch (e) { return {}; }
+}
+function getRemark(box) {
+  if (!box) return '';
+  return (getRemarks()[box] || '').trim();
+}
+function setRemark(box, name) {
+  const all = getRemarks();
+  if (name && name.trim()) all[box] = name.trim();
+  else delete all[box];
+  localStorage.setItem(REMARK_KEY, JSON.stringify(all));
+}
+// 显示格式：有备注 → "备注（信箱号）"，无备注 → 原样
+function remarkLabel(box, fallback) {
+  if (!box) return fallback || '';
+  const r = getRemark(box);
+  return r ? r + '（' + box + '）' : box;
+}
+// 备注/编辑弹窗
+function promptRemark(box) {
+  if (!box) return;
+  const cur = getRemark(box);
+  const input = prompt('为信箱 ' + box + ' 设置备注（留空清除）：', cur);
+  if (input === null) return; // 取消
+  const name = input.trim();
+  setRemark(box, name);
+  toast(name ? '备注已保存：' + name : '备注已清除');
+  renderInbox(); renderSent();
 }
 
 /* 收件箱：删除（仅自己页面，调 Worker 删 inbox 索引） */
@@ -1957,7 +2001,7 @@ function renderSent() {
     inner.innerHTML = `
       <span class="stamp ${done ? 'done' : ''}">${esc(m.to || '')}</span>
       <div class="sent-info">
-        <div class="sent-to">致：${esc(m.to || '')}${m.pinned ? ' 📌' : ''}</div>
+        <div class="sent-to">致：${esc(remarkLabel(m.to || ''))}${m.pinned ? ' 📌' : ''}</div>
         <div class="sent-sub">${esc(m.content || '')}</div>
       </div>
       <span class="sent-badge ${st}">${statusText(st)}</span>`;
@@ -2025,6 +2069,14 @@ function renderSent() {
         } catch (e) { toast('飞鸽疲惫，稍后再试'); }
       });
       act.appendChild(rb);
+      // 飞行中也可备注收件人信箱
+      if (m.to) {
+        const btnRemark = document.createElement('button');
+        btnRemark.className = 'btn-recalled';
+        btnRemark.textContent = getRemark(m.to) ? '改备注' : '备注';
+        btnRemark.addEventListener('click', (e) => { e.stopPropagation(); promptRemark(m.to); });
+        act.appendChild(btnRemark);
+      }
       detail.appendChild(act);
     }
     // 殒命：殒命图框 + 殒命提示
@@ -2043,7 +2095,7 @@ function renderSent() {
       body.innerHTML = `
         <div class="paper">
           <div class="content">${esc(m.content || '')}</div>
-          <div class="colophon">致：${esc(m.to || '')} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
+          <div class="colophon">致：${esc(remarkLabel(m.to || ''))} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
           ${m.readAt ? `<div class="read-note">已展阅 · ${formatShort(m.readAt)}</div>` : '<div class="read-note" style="color:var(--ink-faint)">尚未展阅</div>'}
         </div>`;
       detail.appendChild(body);
@@ -2069,6 +2121,14 @@ function renderSent() {
       btnDel.textContent = '删除';
       btnDel.addEventListener('click', (e) => { e.stopPropagation(); deleteSentMsg(m.id); });
       actBox.appendChild(btnPin);
+      // 备注：给收件人信箱加备注（本地缓存）
+      if (m.to) {
+        const btnRemark = document.createElement('button');
+        btnRemark.className = 'btn-recalled';
+        btnRemark.textContent = getRemark(m.to) ? '改备注' : '备注';
+        btnRemark.addEventListener('click', (e) => { e.stopPropagation(); promptRemark(m.to); });
+        actBox.appendChild(btnRemark);
+      }
       actBox.appendChild(btnDel);
       detail.appendChild(actBox);
     }
