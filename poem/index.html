@@ -560,6 +560,50 @@ body.detail-open .detail-view{display:block}
 .jianzhu-save:hover{background:var(--cinnabar);color:color-mix(in oklch, var(--paper) 92%, white)}
 .jianzhu-hint{margin-top:8px;font-size:0.74rem;color:var(--ink-faint);letter-spacing:0.05em}
 
+/* 清理缓存 */
+.cache-clear-row{
+  margin-top:28px;
+  padding-top:16px;
+  border-top:1px dashed var(--hair-strong);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.cache-clear-btn{
+  border:1px solid var(--hair-strong);
+  background:transparent;
+  border-radius:999px;
+  padding:6px 16px;
+  font-family:var(--serif);
+  font-size:0.8rem;
+  color:var(--ink-faint);
+  cursor:pointer;
+  letter-spacing:0.06em;
+  transition:all .2s;
+}
+.cache-clear-btn:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
+.cache-clear-btn:active{transform:translateY(1px)}
+.cache-clear-hint{font-size:0.72rem;color:var(--ink-faint);letter-spacing:0.04em}
+
+/* 轻提示 toast */
+.cache-toast{
+  position:fixed;
+  left:50%;bottom:12%;
+  transform:translateX(-50%) translateY(10px);
+  background:var(--ink);
+  color:var(--paper);
+  font-size:0.84rem;
+  letter-spacing:0.06em;
+  padding:9px 22px;
+  border-radius:999px;
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+  opacity:0;
+  pointer-events:none;
+  transition:all .3s cubic-bezier(.22,.68,.32,1);
+  z-index:3000;
+  max-width:82vw;
+  text-align:center;
+}
+.cache-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
 /* ===== Empty ===== */
 .empty{
   text-align:center;
@@ -1110,7 +1154,11 @@ function showDetail(no){
     + '<button class="action-btn" type="button" id="btnNote" title="点击显示，再点隐藏">笺 · 笺注</button>'
     + '</div>'
     + '<p class="list-hint" style="margin-top:12px">点击上方按钮展开，再点一次即可收起</p>'
-    + '<div class="detail-output" id="detailOutput"></div>';
+    + '<div class="detail-output" id="detailOutput"></div>'
+    + '<div class="cache-clear-row">'
+    + '<button class="cache-clear-btn" type="button" id="btnClearCache">🧹 清理翻译与AI评诗缓存</button>'
+    + '<span class="cache-clear-hint">仅清翻译/评诗缓存，笺注保留</span>'
+    + '</div>';
 
   document.getElementById('detailBack').addEventListener('click', ()=>{
     history.back();
@@ -1118,6 +1166,7 @@ function showDetail(no){
   document.getElementById('btnTrans').addEventListener('click', ()=>doTrans());
   document.getElementById('btnReview').addEventListener('click', ()=>doReview());
   document.getElementById('btnNote').addEventListener('click', toggleJianzhu);
+  document.getElementById('btnClearCache').addEventListener('click', clearPoemCache);
 
   // 已保存的笺注 → 详情页下方直接展示
   renderSavedJianzhu();
@@ -1218,6 +1267,44 @@ function loadingBox(box, text){
 function errorBox(box){
   box.querySelector('.ai-box-content').innerHTML =
     '<span class="ai-error">⚠️ 乐江AI繁忙，请稍后重试~</span>';
+}
+
+// 清理翻译/AI评诗缓存（笺注 poemnote_* 不动）
+function clearPoemCache(){
+  const keysToRemove = [];
+  for(let i=0; i<localStorage.length; i++){
+    const k = localStorage.key(i);
+    if(k && k.startsWith('poemai_')) keysToRemove.push(k);
+  }
+  if(!keysToRemove.length){
+    showCacheToast('当前没有可清理的缓存');
+    return;
+  }
+  keysToRemove.forEach(k=>localStorage.removeItem(k));
+  // 移除已显示的翻译/评诗盒子，重置按钮态
+  ['trans','review'].forEach(t=>{
+    document.getElementById('box-'+t)?.remove();
+  });
+  ['btnTrans','btnReview'].forEach(id=>{
+    document.getElementById(id)?.classList.remove('active');
+  });
+  showCacheToast('已清理 ' + keysToRemove.length + ' 条缓存（笺注不受影响）');
+}
+
+// 轻提示 toast
+let cacheToastTimer = null;
+function showCacheToast(msg){
+  let el = document.getElementById('cacheToast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'cacheToast';
+    el.className = 'cache-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(cacheToastTimer);
+  cacheToastTimer = setTimeout(()=>el.classList.remove('show'), 2400);
 }
 
 // 翻译：再点隐藏；有固定翻译用固定，否则本地缓存，再否则调AI
