@@ -186,6 +186,12 @@ input,textarea{font-family:inherit;color:var(--ink)}
   font-size:15px;letter-spacing:.08em;background:rgba(255,255,255,.5);color:var(--ink);margin-top:2px;
 }
 #wxUidInput:focus{outline:none;border-color:var(--gold)}
+.wx-qr-box{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:12px;border:1px dashed var(--paper-line);border-radius:8px;margin-top:4px;background:rgba(255,255,255,.4);
+}
+#wxQrImg{width:190px;height:190px;object-fit:contain;border-radius:4px;background:#fff;padding:6px}
+.wx-qr-tip{font-size:12px;color:var(--ink-faint);letter-spacing:.05em}
 
 /* 顶部淡墨分隔线 */
 .mast-divider{max-width:560px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:10px}
@@ -941,15 +947,13 @@ body.owner-open .tabbar{display:none}
     <h3>微信通知</h3>
     <div id="wxBindArea">
       <div class="wx-warn">不开启将不会收到提示：信件到了、信使殒命，都只能自己进入网站查看，不会有任何提醒。</div>
-      <p class="wx-steps">
-        ① 微信搜索公众号「<b>WxPusher</b>」并关注<br>
-        ② 点公众号菜单「我的 → 我的UID」，复制UID<br>
-        ③ 将UID填到下方，绑定后即可收到提醒
-      </p>
-      <input type="text" id="wxUidInput" placeholder="UID_xxxxxxxx" maxlength="32" autocomplete="off" spellcheck="false">
+      <p class="wx-steps">微信扫一扫下方二维码，关注即可开启<br><span style="font-size:12px;color:var(--ink-faint)">信箱 <b id="wxQrBoxNo"></b> 将与你的微信自动绑定</span></p>
+      <div class="wx-qr-box">
+        <img id="wxQrImg" alt="微信扫码绑定" hidden>
+        <p id="wxQrTip" class="wx-qr-tip">正在生成二维码…</p>
+      </div>
       <div class="modal-actions">
-        <button class="btn-cancel" id="btnWxCancel">取消</button>
-        <button class="btn-danger" id="btnWxBind">绑定</button>
+        <button class="btn-cancel" id="btnWxCancel">关闭</button>
       </div>
     </div>
     <div id="wxBoundArea" hidden>
@@ -1092,8 +1096,8 @@ const dom = {
   btnBackHome: $('btnBackHome'),
   btnGPS: $('btnGPS'),
   wxModal: $('wxModal'), wxBindArea: $('wxBindArea'), wxBoundArea: $('wxBoundArea'),
-  wxUidInput: $('wxUidInput'),
-  btnWxCancel: $('btnWxCancel'), btnWxBind: $('btnWxBind'),
+  wxQrImg: $('wxQrImg'), wxQrTip: $('wxQrTip'), wxQrBoxNo: $('wxQrBoxNo'),
+  btnWxCancel: $('btnWxCancel'),
   btnWxUnbind: $('btnWxUnbind'), btnWxClose: $('btnWxClose'),
   wxRemarkSync: $('wxRemarkSync'),
   wxBanner: $('wxBanner'), btnWxOpen: $('btnWxOpen'), btnWxSkip: $('btnWxSkip'),
@@ -2060,13 +2064,49 @@ async function refreshWxStatus() {
   updateWxBanner();
 }
 
+let wxPollTimer = null;
+function stopWxPoll() { if (wxPollTimer) { clearInterval(wxPollTimer); wxPollTimer = null; } }
+
+async function loadWxQrcode() {
+  dom.wxQrBoxNo.textContent = state.box;
+  dom.wxQrImg.hidden = true;
+  dom.wxQrTip.textContent = '正在生成二维码…';
+  try {
+    const res = await fetch(`${API_BASE}/wx/qrcode?box=${state.box}`);
+    const data = await res.json();
+    if (!res.ok || !data.qrcode) { dom.wxQrTip.textContent = data.error || '二维码生成失败，稍后再试'; return; }
+    dom.wxQrImg.src = data.qrcode;
+    dom.wxQrImg.hidden = false;
+    dom.wxQrTip.textContent = '扫码关注后，此窗口将自动完成绑定';
+    // 轮询绑定状态，扫码关注成功后自动切换
+    stopWxPoll();
+    wxPollTimer = setInterval(async () => {
+      try {
+        const r = await fetch(`${API_BASE}/wx/status?box=${state.box}`);
+        const d = await r.json();
+        if (d.bound) {
+          stopWxPoll();
+          wxNotified = true;
+          dom.wxBanner.hidden = true;
+          toast('微信通知已开启');
+          uploadWxRemarks(); // 若之前开过备注同步，绑定后立即上传
+          openWxModal(); // 切到已绑定视图
+        }
+      } catch (e) {}
+    }, 3000);
+  } catch (e) {
+    dom.wxQrTip.textContent = '网络错误，稍后再试';
+  }
+}
+
 function openWxModal() {
   dom.wxBindArea.hidden = wxNotified;
   dom.wxBoundArea.hidden = !wxNotified;
   dom.wxRemarkSync.checked = wxSyncEnabled();
   dom.wxModal.classList.add('show');
+  if (!wxNotified) loadWxQrcode(); // 未绑定时生成扫码二维码
 }
-function closeWxModal() { dom.wxModal.classList.remove('show'); }
+function closeWxModal() { dom.wxModal.classList.remove('show'); stopWxPoll(); }
 
 dom.btnWxEntry.addEventListener('click', openWxModal);
 dom.btnWxOpen.addEventListener('click', openWxModal);
@@ -2077,34 +2117,6 @@ dom.btnWxSkip.addEventListener('click', () => {
 dom.wxModal.addEventListener('click', (e) => { if (e.target === dom.wxModal) closeWxModal(); });
 dom.btnWxCancel.addEventListener('click', closeWxModal);
 dom.btnWxClose.addEventListener('click', closeWxModal);
-
-dom.btnWxBind.addEventListener('click', async () => {
-  const uid = dom.wxUidInput.value.trim();
-  if (!/^UID_[A-Za-z0-9_-]{4,}$/i.test(uid)) {
-    toast('UID 以 UID_ 开头，见公众号菜单「我的-我的UID」');
-    return;
-  }
-  dom.btnWxBind.disabled = true;
-  try {
-    const res = await fetch(`${API_BASE}/wx/bind`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ box: state.box, uid })
-    });
-    const data = await res.json();
-    if (!res.ok) { toast(data.error || '绑定失败'); return; }
-    wxNotified = true;
-    dom.wxUidInput.value = '';
-    dom.wxBanner.hidden = true;
-    toast('微信通知已开启');
-    uploadWxRemarks(); // 若之前开过备注同步，绑定后立即上传
-    openWxModal(); // 切到已绑定视图
-  } catch (e) {
-    toast('网络错误，稍后再试');
-  } finally {
-    dom.btnWxBind.disabled = false;
-  }
-});
 
 dom.btnWxUnbind.addEventListener('click', async () => {
   try {

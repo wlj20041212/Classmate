@@ -7,9 +7,16 @@
 #   5. 把返回的 id 填到下方 kv_namespaces.id
 #   6. wrangler secret put OWNER_PASSWORD    （设置owner密码）
 #   7. wrangler secret put OWNER_SECRET_KEY  （设置JWT签名密钥，随便一串字符）
-#   8. wrangler secret put WXPUSHER_TOKEN    （微信通知 appToken，见 https://wxpusher.zjiecode.com/admin）
+#   8. wrangler secret put WX_APPID          （微信测试号 appID）
+#      wrangler secret put WX_SECRET        （微信测试号 appsecret）
+#      wrangler secret put WX_TOKEN         （自定义Token，与测试号接口配置一致）
+#      wrangler secret put WX_TEMPLATE_ID   （测试号模板消息的模板ID）
 #   9. wrangler deploy
 #  10. 把 Worker URL 填到 chat/index.html 的 API_BASE
+#  11. 微信测试号页面（mp.weixin.qq.com/debug/cgi-bin/sandboxinfo）：
+#      - 「接口配置信息」URL 填 https://<worker域名>/wx/callback，Token 与 WX_TOKEN 一致
+#      - 「模板消息接口」新增模板，内容填：{{first.DATA}}\n{{content.DATA}}\n{{remark.DATA}}
+#        得到的模板ID填入 WX_TEMPLATE_ID
 
 name = "pigeon-chat"
 main = "worker.js"

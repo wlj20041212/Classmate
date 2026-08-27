@@ -111,21 +111,28 @@ async function indexRemove(env, key, id) {
   }
 }
 
-// ============ 微信通知（WxPusher，全部用 get/put/delete，不用 list） ============
-// 部署后需设置 appToken：wrangler secret put WXPUSHER_TOKEN
-// appToken 获取：https://wxpusher.zjiecode.com/admin 后台创建应用
-// 用户流程：关注公众号「WxPusher」→ 菜单「我的-我的UID」→ 在页面绑定 UID
-const WXPUSH_API = 'https://wxpusher.zjiecode.com/api/send/message';
+// ============ 微信通知（微信测试号 + 模板消息，全部用 get/put/delete，不用 list） ============
+// 部署后需设置 secrets：
+//   wrangler secret put WX_APPID       （测试号 appID）
+//   wrangler secret put WX_SECRET     （测试号 appsecret）
+//   wrangler secret put WX_TOKEN      （接口配置信息的 Token，自定义字符串）
+//   wrangler secret put WX_TEMPLATE_ID（测试号新增模板后得到的模板ID）
+// 测试号页面「接口配置信息」填：
+//   URL:   https://<worker域名>/wx/callback
+//   Token: 与 WX_TOKEN 一致
+// 用户流程：页面点开启通知 → 展示带信箱参数的二维码 → 微信扫码关注 → 自动绑定
+const WX_API = 'https://api.weixin.qq.com';
 const SITE_URL = 'https://wanglejiang.top/chat';
 const SUPPORT_LINE = '有任何问题可发邮件：2252821948@qq.com（六小时回复一次）';
 const WX_PEND_KEY = 'pend'; // 待送达通知队列（单key，cron用get读取，避免list限额）
+const WX_TOKEN_CACHE = 'wx_access_token_cache'; // access_token 缓存（2小时有效）
 // KV 新增键：
-//   wxuid:{box}    → WxPusher UID（一个UID可绑多个信箱，迁移后旧号通知仍可达）
+//   wxopenid:{box} → 用户 openid（扫码自动绑定，一个微信可绑多个信箱，迁移后旧号通知仍可达）
 //   wxremark:{box} → {对方信箱:备注}（用户自己的备注，仅用于发给他本人的通知）
 
-async function getWxUid(env, box) {
+async function getWxOpenid(env, box) {
   if (!box) return '';
-  try { return (await env.MESSAGES.get(`wxuid:${box}`)) || ''; } catch (e) { return ''; }
+  try { return (await env.MESSAGES.get(`wxopenid:${box}`)) || ''; } catch (e) { return ''; }
 }
 async function getWxRemarks(env, box) {
   if (!box) return {};
@@ -142,34 +149,113 @@ function fmtFly(h) {
   if (h < 24) return (Math.round(h * 10) / 10) + '小时';
   return (Math.round((h / 24) * 10) / 10) + '天';
 }
-// 推送一条微信通知；返回 {ok, msg}
-async function wxPush(env, uid, title, content) {
-  const token = env.WXPUSHER_TOKEN;
-  if (!token || !uid) return { ok: false, msg: '未配置' };
+
+// access_token 管理：KV 缓存，过期前5分钟刷新
+async function getWxAccessToken(env) {
+  if (!env.WX_APPID || !env.WX_SECRET) return '';
   try {
-    const res = await fetch(WXPUSH_API, {
+    const cached = await env.MESSAGES.get(WX_TOKEN_CACHE);
+    if (cached) {
+      const { token, expires } = JSON.parse(cached);
+      if (token && Date.now() < expires - 300000) return token;
+    }
+  } catch (e) {}
+  try {
+    const res = await fetch(`${WX_API}/cgi-bin/token?grant_type=client_credential&appid=${env.WX_APPID}&secret=${env.WX_SECRET}`);
+    const data = await res.json();
+    if (!data.access_token) return '';
+    const expires = Date.now() + (data.expires_in || 7200) * 1000;
+    await env.MESSAGES.put(WX_TOKEN_CACHE, JSON.stringify({ token: data.access_token, expires }));
+    return data.access_token;
+  } catch (e) { return ''; }
+}
+
+// 推送一条模板消息通知；返回 {ok, msg}
+// 模板内容（测试号新增模板时填写）：
+//   {{first.DATA}}\n{{content.DATA}}\n{{remark.DATA}}
+async function wxPush(env, openid, title, content) {
+  if (!openid || !env.WX_TEMPLATE_ID) return { ok: false, msg: '未配置' };
+  const token = await getWxAccessToken(env);
+  if (!token) return { ok: false, msg: 'token获取失败' };
+  try {
+    const res = await fetch(`${WX_API}/cgi-bin/message/template/send?access_token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        appToken: token,
-        uids: [uid],
-        title,
-        summary: title,
-        contentType: 1, // 1 文本
-        content: content + '\n\n' + SUPPORT_LINE,
+        touser: openid,
+        template_id: env.WX_TEMPLATE_ID,
         url: SITE_URL,
+        data: {
+          first: { value: title, color: '#b3432b' },
+          content: { value: content },
+          remark: { value: SUPPORT_LINE, color: '#9a8a72' },
+        },
       }),
     });
     const data = await res.json().catch(() => ({}));
-    // WxPusher 返回 code=1000 成功；data[0] 为该 uid 的结果
-    if (data.code === 1000 && Array.isArray(data.data) && data.data.length) {
-      const r = data.data[0];
-      if (r.code === 1000) return { ok: true };
-      return { ok: false, msg: r.msg || '推送失败' };
-    }
-    return { ok: false, msg: data.msg || '推送失败' };
+    return data.errcode === 0 ? { ok: true } : { ok: false, msg: (data.errcode || '') + ' ' + (data.errmsg || '') };
   } catch (e) {
     return { ok: false, msg: '网络错误' };
+  }
+}
+
+// 微信回调：GET 验证服务器（echostr）；POST 接收事件（扫码关注自动绑定）
+async function handleWxCallback(request, env, url) {
+  const method = request.method;
+  const q = url.searchParams;
+  if (method === 'GET') {
+    // 签名验证：sha1(sort(token, timestamp, nonce)) === signature
+    const signature = q.get('signature') || '', timestamp = q.get('timestamp') || '', nonce = q.get('nonce') || '';
+    const echostr = q.get('echostr') || '';
+    const arr = [env.WX_TOKEN || '', timestamp, nonce].sort();
+    const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(arr.join('')));
+    const hash = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+    return new Response(hash === signature ? echostr : '', { status: hash === signature ? 200 : 403 });
+  }
+  if (method === 'POST') {
+    try {
+      const xml = await request.text();
+      const pick = (tag) => { const m = xml.match(new RegExp('<' + tag + '><!\\[CDATA\\[(.*?)\\]\\]></' + tag + '>')); return m ? m[1] : ''; };
+      const eventType = pick('Event');
+      const openid = pick('FromUserName');
+      if (!openid) return new Response('success');
+      if (eventType === 'subscribe' || eventType === 'SCAN') {
+        // 扫码绑定：EventKey 为 qrscene_{信箱号}（首次关注）或 {信箱号}（已关注再扫）
+        let key = pick('EventKey') || '';
+        if (key.startsWith('qrscene_')) key = key.slice('qrscene_'.length);
+        if (/^[A-HJ-NP-Z2-9]{6}$/.test(key)) {
+          await env.MESSAGES.put(`wxopenid:${key}`, openid);
+          await wxPush(env, openid, '飞鸽传书 · 绑定成功',
+            '信箱 ' + key + ' 已开启微信通知\n新信在途、送达、信使殒命均会在此提醒你');
+        }
+      }
+    } catch (e) {}
+    return new Response('success');
+  }
+  return new Response('success');
+}
+
+// 生成带信箱参数的二维码：用户扫码关注即绑定
+async function handleWxQrcode(request, env, url) {
+  const b = (url.searchParams.get('box') || '').toUpperCase();
+  if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
+  const token = await getWxAccessToken(env);
+  if (!token) return json({ error: '通知服务未配置或不可用' }, 500);
+  try {
+    const res = await fetch(`${WX_API}/cgi-bin/qrcode/create?access_token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expire_seconds: 86400, // 二维码1天有效
+        action_name: 'QR_STR_SCENE',
+        action_info: { scene: { scene_str: b } },
+      }),
+    });
+    const data = await res.json();
+    if (!data.ticket) return json({ error: '获取二维码失败' }, 500);
+    return json({ ok: true, qrcode: 'https://mp.weixin.qq.com/cgi-bin/showqrcode?ticket=' + encodeURIComponent(data.ticket) });
+  } catch (e) {
+    return json({ error: '获取二维码失败' }, 500);
   }
 }
 
@@ -191,7 +277,7 @@ async function wxRegisterSend(env, msg) {
   const flyStr = fmtFly(msg.flyHours);
   const sentTime = toBJTime(msg.createdAt);
   // 收件人：新信在途提醒
-  const toUid = await getWxUid(env, msg.to);
+  const toUid = await getWxOpenid(env, msg.to);
   if (toUid) {
     const rmk = await getWxRemarks(env, msg.to);
     await wxPush(env, toUid, '飞鸽传书 · 新信在途',
@@ -199,7 +285,7 @@ async function wxRegisterSend(env, msg) {
       '预计 ' + flyStr + ' 后抵达你的信箱\n寄出时间：' + sentTime);
   }
   // 发件人：寄出回执（正在运送中）
-  const fromUid = await getWxUid(env, msg.from);
+  const fromUid = await getWxOpenid(env, msg.from);
   if (fromUid) {
     const rmk = await getWxRemarks(env, msg.from);
     await wxPush(env, fromUid, '飞鸽传书 · 送达回执',
@@ -212,8 +298,8 @@ async function wxRegisterSend(env, msg) {
 async function wxNotifyArrived(env, msg) {
   const flyStr = fmtFly(msg.flyHours);
   const sentTime = toBJTime(msg.createdAt);
-  const toUid = await getWxUid(env, msg.to);
-  const fromUid = await getWxUid(env, msg.from);
+  const toUid = await getWxOpenid(env, msg.to);
+  const fromUid = await getWxOpenid(env, msg.from);
   if (msg.willDie) {
     // 殒命：双方都告知（收件人在发信时已收到在途提醒，不能让他空等）
     if (toUid) {
@@ -306,8 +392,9 @@ export default {
     if (path === '/api/getname' && method === 'GET') return handleGetName(request, env, url);
     if (path === '/api/setname' && method === 'POST') return handleSetName(request, env);
 
-    // 微信通知（WxPusher）
-    if (path === '/api/wx/bind' && method === 'POST') return handleWxBind(request, env);
+    // 微信通知（测试号）
+    if (path === '/wx/callback') return handleWxCallback(request, env, url);
+    if (path === '/api/wx/qrcode' && method === 'GET') return handleWxQrcode(request, env, url);
     if (path === '/api/wx/unbind' && method === 'POST') return handleWxUnbind(request, env);
     if (path === '/api/wx/status' && method === 'GET') return handleWxStatus(request, env, url);
     if (path === '/api/wx/remarks' && method === 'POST') return handleWxRemarks(request, env);
@@ -798,35 +885,13 @@ async function handleSetName(request, env) {
   }
 }
 
-// ============ 微信通知：绑定 / 解绑 / 状态 / 备注同步 ============
-async function handleWxBind(request, env) {
-  try {
-    const { box, uid } = await request.json();
-    const b = (box || '').toUpperCase();
-    if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
-    const u = (uid || '').trim();
-    if (!/^UID_[A-Za-z0-9_-]{4,}$/.test(u)) {
-      return json({ error: 'UID 格式不对（以 UID_ 开头，见公众号菜单「我的-我的UID」）' }, 400);
-    }
-    // 试推一条，验证 UID 有效且已关注
-    const test = await wxPush(env, u, '飞鸽传书 · 绑定成功',
-      '信箱 ' + b + ' 已开启微信通知\n新信在途、送达、信使殒命都会在此提醒你');
-    if (!test.ok) {
-      return json({ error: test.msg === '未配置' ? '服务端尚未配置 WxPusher appToken' : '绑定失败：' + test.msg }, 400);
-    }
-    await env.MESSAGES.put(`wxuid:${b}`, u);
-    return json({ ok: true, uid: u });
-  } catch (e) {
-    return json({ error: '绑定失败' }, 500);
-  }
-}
-
+// ============ 微信通知：解绑 / 状态 / 备注同步（绑定走扫码回调） ============
 async function handleWxUnbind(request, env) {
   try {
     const { box } = await request.json();
     const b = (box || '').toUpperCase();
     if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
-    await env.MESSAGES.delete(`wxuid:${b}`);
+    await env.MESSAGES.delete(`wxopenid:${b}`);
     // 备注（通知用）也一并清理
     await env.MESSAGES.delete(`wxremark:${b}`);
     return json({ ok: true });
@@ -838,8 +903,8 @@ async function handleWxUnbind(request, env) {
 async function handleWxStatus(request, env, url) {
   const b = (url.searchParams.get('box') || '').toUpperCase();
   if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
-  const uid = await getWxUid(env, b);
-  return json({ bound: !!uid, uid: uid || '' });
+  const openid = await getWxOpenid(env, b);
+  return json({ bound: !!openid });
 }
 
 async function handleWxRemarks(request, env) {
