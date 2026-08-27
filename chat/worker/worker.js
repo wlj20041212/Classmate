@@ -111,8 +111,174 @@ async function indexRemove(env, key, id) {
   }
 }
 
+// ============ 微信通知（WxPusher，全部用 get/put/delete，不用 list） ============
+// 部署后需设置 appToken：wrangler secret put WXPUSHER_TOKEN
+// appToken 获取：https://wxpusher.zjiecode.com/admin 后台创建应用
+// 用户流程：关注公众号「WxPusher」→ 菜单「我的-我的UID」→ 在页面绑定 UID
+const WXPUSH_API = 'https://wxpusher.zjiecode.com/api/send/message';
+const SITE_URL = 'https://wanglejiang.top/chat';
+const SUPPORT_LINE = '有任何问题可发邮件：2252821948@qq.com（六小时回复一次）';
+const WX_PEND_KEY = 'pend'; // 待送达通知队列（单key，cron用get读取，避免list限额）
+// KV 新增键：
+//   wxuid:{box}    → WxPusher UID（一个UID可绑多个信箱，迁移后旧号通知仍可达）
+//   wxremark:{box} → {对方信箱:备注}（用户自己的备注，仅用于发给他本人的通知）
+
+async function getWxUid(env, box) {
+  if (!box) return '';
+  try { return (await env.MESSAGES.get(`wxuid:${box}`)) || ''; } catch (e) { return ''; }
+}
+async function getWxRemarks(env, box) {
+  if (!box) return {};
+  try { return JSON.parse((await env.MESSAGES.get(`wxremark:${box}`)) || '{}'); } catch (e) { return {}; }
+}
+// 联系人显示：有备注 → 备注（信箱号）；无备注 → 信箱号
+function wxContactLabel(remarks, box) {
+  const r = (remarks && remarks[box]) || '';
+  return r ? r + '（' + box + '）' : box;
+}
+function fmtFly(h) {
+  if (!h || h <= 0) return '片刻';
+  if (h < 1) return Math.max(1, Math.round(h * 60)) + '分钟';
+  if (h < 24) return (Math.round(h * 10) / 10) + '小时';
+  return (Math.round((h / 24) * 10) / 10) + '天';
+}
+// 推送一条微信通知；返回 {ok, msg}
+async function wxPush(env, uid, title, content) {
+  const token = env.WXPUSHER_TOKEN;
+  if (!token || !uid) return { ok: false, msg: '未配置' };
+  try {
+    const res = await fetch(WXPUSH_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        appToken: token,
+        uids: [uid],
+        title,
+        summary: title,
+        contentType: 1, // 1 文本
+        content: content + '\n\n' + SUPPORT_LINE,
+        url: SITE_URL,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    // WxPusher 返回 code=1000 成功；data[0] 为该 uid 的结果
+    if (data.code === 1000 && Array.isArray(data.data) && data.data.length) {
+      const r = data.data[0];
+      if (r.code === 1000) return { ok: true };
+      return { ok: false, msg: r.msg || '推送失败' };
+    }
+    return { ok: false, msg: data.msg || '推送失败' };
+  } catch (e) {
+    return { ok: false, msg: '网络错误' };
+  }
+}
+
+// 发信时：登记待送达队列 + 收件人在途提醒 + 发件人寄出回执
+async function wxRegisterSend(env, msg) {
+  // 登记待送达队列（单key，cron到点处理送达/殒命通知）
+  try {
+    let pend = [];
+    try { pend = JSON.parse((await env.MESSAGES.get(WX_PEND_KEY)) || '[]'); } catch (e) {}
+    if (!Array.isArray(pend)) pend = [];
+    pend.push({
+      id: msg.id, to: msg.to, from: msg.from,
+      deliverAt: msg.deliverAt, willDie: msg.willDie,
+      deathReason: msg.deathReason || '', flyHours: msg.flyHours, createdAt: msg.createdAt,
+    });
+    await env.MESSAGES.put(WX_PEND_KEY, JSON.stringify(pend));
+  } catch (e) {}
+
+  const flyStr = fmtFly(msg.flyHours);
+  const sentTime = toBJTime(msg.createdAt);
+  // 收件人：新信在途提醒
+  const toUid = await getWxUid(env, msg.to);
+  if (toUid) {
+    const rmk = await getWxRemarks(env, msg.to);
+    await wxPush(env, toUid, '飞鸽传书 · 新信在途',
+      '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信正在飞来\n' +
+      '预计 ' + flyStr + ' 后抵达你的信箱\n寄出时间：' + sentTime);
+  }
+  // 发件人：寄出回执（正在运送中）
+  const fromUid = await getWxUid(env, msg.from);
+  if (fromUid) {
+    const rmk = await getWxRemarks(env, msg.from);
+    await wxPush(env, fromUid, '飞鸽传书 · 送达回执',
+      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已发送，正在运送中\n' +
+      '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+  }
+}
+
+// 送达/殒命通知：什么时候到/什么时候死，就什么时候提示
+async function wxNotifyArrived(env, msg) {
+  const flyStr = fmtFly(msg.flyHours);
+  const sentTime = toBJTime(msg.createdAt);
+  const toUid = await getWxUid(env, msg.to);
+  const fromUid = await getWxUid(env, msg.from);
+  if (msg.willDie) {
+    // 殒命：双方都告知（收件人在发信时已收到在途提醒，不能让他空等）
+    if (toUid) {
+      const rmk = await getWxRemarks(env, msg.to);
+      await wxPush(env, toUid, '飞鸽传书 · 信使殒命',
+        '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，信使途中殒命，未能送达\n' +
+        '死因：' + (msg.deathReason || '天有不测风云'));
+    }
+    if (fromUid) {
+      const rmk = await getWxRemarks(env, msg.from);
+      await wxPush(env, fromUid, '飞鸽传书 · 信使殒命',
+        '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信使途中殒命，信件未能送达\n' +
+        '死因：' + (msg.deathReason || '天有不测风云') + '\n' +
+        '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+    }
+    return;
+  }
+  // 送达：收件人提示信到了
+  if (toUid) {
+    const rmk = await getWxRemarks(env, msg.to);
+    await wxPush(env, toUid, '飞鸽传书 · 新信件',
+      '你的信箱收到一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，纸短情长，速去查看\n' +
+      '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+  }
+  // 送达：发件人回执
+  if (fromUid) {
+    const rmk = await getWxRemarks(env, msg.from);
+    await wxPush(env, fromUid, '飞鸽传书 · 送达回执',
+      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已安全送达对方信箱\n' +
+      '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+  }
+}
+
+// cron 每分钟跑：到点的信 → 更新状态 + 推送送达/殒命通知
+async function processWxPend(env) {
+  let pend = [];
+  try { pend = JSON.parse((await env.MESSAGES.get(WX_PEND_KEY)) || '[]'); } catch (e) {}
+  if (!Array.isArray(pend) || !pend.length) return;
+  const now = Date.now();
+  const remain = [];
+  for (const item of pend) {
+    if (!item || !item.id) continue;
+    if ((item.deliverAt || 0) > now) { remain.push(item); continue; }
+    try {
+      const raw = await env.MESSAGES.get('msg:' + item.id);
+      if (!raw) continue; // 信件已不存在，丢弃
+      const msg = JSON.parse(raw);
+      if (msg.status !== 'flying') continue; // 已召回/已被查询处理，丢弃
+      // 与 computeStatus 相同的状态判定
+      msg.status = msg.willDie ? 'dead' : 'delivered';
+      await env.MESSAGES.put('msg:' + item.id, JSON.stringify(msg));
+      await wxNotifyArrived(env, msg);
+    } catch (e) {
+      remain.push(item); // 出错留下轮重试
+    }
+  }
+  await env.MESSAGES.put(WX_PEND_KEY, JSON.stringify(remain));
+}
+
 // ============ 主入口 ============
 export default {
+  async scheduled(event, env, ctx) {
+    // 每分钟：检查到点信件，推送送达/殒命通知
+    ctx.waitUntil(processWxPend(env));
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     let path = url.pathname;
@@ -139,6 +305,12 @@ export default {
     if (path === '/api/migrate' && method === 'POST') return handleMigrate(request, env);
     if (path === '/api/getname' && method === 'GET') return handleGetName(request, env, url);
     if (path === '/api/setname' && method === 'POST') return handleSetName(request, env);
+
+    // 微信通知（WxPusher）
+    if (path === '/api/wx/bind' && method === 'POST') return handleWxBind(request, env);
+    if (path === '/api/wx/unbind' && method === 'POST') return handleWxUnbind(request, env);
+    if (path === '/api/wx/status' && method === 'GET') return handleWxStatus(request, env, url);
+    if (path === '/api/wx/remarks' && method === 'POST') return handleWxRemarks(request, env);
 
     // owner 接口
     if (path === '/api/owner-login' && method === 'POST') return handleOwnerLogin(request, env);
@@ -192,6 +364,9 @@ async function handleSend(request, env) {
     // 兼容旧数据格式（同时写旧 key，但不再 list 读取）
     await env.MESSAGES.put(`inbox:${to}:${msg.id}`, msg.id);
     await env.MESSAGES.put(`sent:${from}:${msg.id}`, msg.id);
+
+    // 微信通知：登记待送达队列 + 收件人在途提醒 + 发件人寄出回执
+    await wxRegisterSend(env, msg);
 
     return json({ ok: true, messageId: msg.id, deliverAt });
   } catch (e) {
@@ -618,6 +793,74 @@ async function handleSetName(request, env) {
     }
     await env.MESSAGES.put(`name:${b}`, n);
     return json({ ok: true, name: n });
+  } catch (e) {
+    return json({ error: '保存失败' }, 500);
+  }
+}
+
+// ============ 微信通知：绑定 / 解绑 / 状态 / 备注同步 ============
+async function handleWxBind(request, env) {
+  try {
+    const { box, uid } = await request.json();
+    const b = (box || '').toUpperCase();
+    if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
+    const u = (uid || '').trim();
+    if (!/^UID_[A-Za-z0-9_-]{4,}$/.test(u)) {
+      return json({ error: 'UID 格式不对（以 UID_ 开头，见公众号菜单「我的-我的UID」）' }, 400);
+    }
+    // 试推一条，验证 UID 有效且已关注
+    const test = await wxPush(env, u, '飞鸽传书 · 绑定成功',
+      '信箱 ' + b + ' 已开启微信通知\n新信在途、送达、信使殒命都会在此提醒你');
+    if (!test.ok) {
+      return json({ error: test.msg === '未配置' ? '服务端尚未配置 WxPusher appToken' : '绑定失败：' + test.msg }, 400);
+    }
+    await env.MESSAGES.put(`wxuid:${b}`, u);
+    return json({ ok: true, uid: u });
+  } catch (e) {
+    return json({ error: '绑定失败' }, 500);
+  }
+}
+
+async function handleWxUnbind(request, env) {
+  try {
+    const { box } = await request.json();
+    const b = (box || '').toUpperCase();
+    if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
+    await env.MESSAGES.delete(`wxuid:${b}`);
+    // 备注（通知用）也一并清理
+    await env.MESSAGES.delete(`wxremark:${b}`);
+    return json({ ok: true });
+  } catch (e) {
+    return json({ error: '解绑失败' }, 500);
+  }
+}
+
+async function handleWxStatus(request, env, url) {
+  const b = (url.searchParams.get('box') || '').toUpperCase();
+  if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
+  const uid = await getWxUid(env, b);
+  return json({ bound: !!uid, uid: uid || '' });
+}
+
+async function handleWxRemarks(request, env) {
+  try {
+    const { box, remarks } = await request.json();
+    const b = (box || '').toUpperCase();
+    if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
+    const clean = {};
+    if (remarks && typeof remarks === 'object') {
+      const keys = Object.keys(remarks).slice(0, 200);
+      for (const k of keys) {
+        if (/^[A-HJ-NP-Z2-9]{6}$/.test(k)) {
+          const v = String(remarks[k] || '').trim().slice(0, 12);
+          if (v) clean[k] = v;
+        }
+      }
+    }
+    // 空则删（关同步开关/清空时，服务端不残留）
+    if (Object.keys(clean).length) await env.MESSAGES.put(`wxremark:${b}`, JSON.stringify(clean));
+    else await env.MESSAGES.delete(`wxremark:${b}`);
+    return json({ ok: true });
   } catch (e) {
     return json({ error: '保存失败' }, 500);
   }

@@ -7,12 +7,17 @@
 #   5. 把返回的 id 填到下方 kv_namespaces.id
 #   6. wrangler secret put OWNER_PASSWORD    （设置owner密码）
 #   7. wrangler secret put OWNER_SECRET_KEY  （设置JWT签名密钥，随便一串字符）
-#   8. wrangler deploy
-#   9. 把 Worker URL 填到 chat/index.html 的 API_BASE
+#   8. wrangler secret put WXPUSHER_TOKEN    （微信通知 appToken，见 https://wxpusher.zjiecode.com/admin）
+#   9. wrangler deploy
+#  10. 把 Worker URL 填到 chat/index.html 的 API_BASE
 
 name = "pigeon-chat"
 main = "worker.js"
 compatibility_date = "2024-12-01"
+
+# 每分钟检查到点信件：推送送达/殒命微信通知（仅 get/put 单key，不占 list 额度）
+[triggers]
+crons = ["* * * * *"]
 
 # 消息存储 KV
 [[kv_namespaces]]

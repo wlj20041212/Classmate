@@ -151,6 +151,42 @@ input,textarea{font-family:inherit;color:var(--ink)}
 }
 .gps-banner.hide{display:none}
 
+/* 微信通知：写信页提示 / 收信页横幅 / 绑定弹窗 */
+.wx-page-hint{
+  font-size:12px;color:var(--ink-faint);text-align:center;
+  margin:10px 0 0;letter-spacing:.05em;
+}
+.wx-banner{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 14px;margin-bottom:12px;
+  background:linear-gradient(135deg,rgba(179,67,43,.09),rgba(179,67,43,.03));
+  border:1px solid rgba(179,67,43,.38);border-radius:8px;
+}
+.wx-banner[hidden]{display:none}
+.wx-banner-main{flex:1;min-width:0}
+.wx-banner-t1{font-size:14px;font-weight:700;color:var(--cinnabar);font-family:var(--kai);letter-spacing:.06em}
+.wx-banner-t2{font-size:11px;color:var(--ink-soft);margin-top:3px;line-height:1.5}
+.wx-banner-btn{
+  background:var(--cinnabar);color:var(--paper);border:none;padding:8px 14px;border-radius:4px;
+  cursor:pointer;font-size:13px;font-family:var(--kai);letter-spacing:.1em;white-space:nowrap;
+}
+.wx-banner-btn:active{transform:scale(.96)}
+.wx-banner-skip{
+  background:transparent;border:none;color:var(--ink-faint);font-size:20px;cursor:pointer;
+  width:28px;height:28px;line-height:1;padding:0;flex-shrink:0;
+}
+.wx-warn{
+  font-size:13px;line-height:1.8;color:var(--cinnabar);background:rgba(179,67,43,.07);
+  border:1px solid rgba(179,67,43,.32);border-radius:6px;padding:10px 12px;
+  text-align:left;letter-spacing:.03em;margin-bottom:10px;
+}
+.wx-steps{font-size:13px;line-height:2;color:var(--ink-soft);text-align:left;letter-spacing:.03em}
+#wxUidInput{
+  width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--paper-line);border-radius:6px;
+  font-size:15px;letter-spacing:.08em;background:rgba(255,255,255,.5);color:var(--ink);margin-top:2px;
+}
+#wxUidInput:focus{outline:none;border-color:var(--gold)}
+
 /* 顶部淡墨分隔线 */
 .mast-divider{max-width:560px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:10px}
 .mast-divider::before,.mast-divider::after{
@@ -703,6 +739,7 @@ body.owner-open .tabbar{display:none}
       <button class="btn-share" id="btnMyName">信箱取名</button>
       <button class="btn-reset" id="btnReset">重置</button>
       <button class="btn-gps" id="btnGPS" title="点击重新获取定位">获取定位</button>
+      <button class="btn-gps" id="btnWxEntry" title="微信通知设置">🔔 通知</button>
     </div>
   </div>
 </header>
@@ -750,6 +787,7 @@ body.owner-open .tabbar{display:none}
     </div>
     <div class="gps-note" id="gpsNote"><span class="dot"></span><span id="gpsNoteText">发送时将请求定位，以便信鸽飞抵有迹可循</span></div>
     <button class="btn-send" id="btnSend">放飞信使</button>
+    <p class="wx-page-hint">信件送达会通过微信公众号提示你，无需在此页面等待</p>
 
     <!-- 发送成功后提示去"我发的"查看 -->
     <div class="airborne-card" id="airborneCard">
@@ -769,6 +807,15 @@ body.owner-open .tabbar{display:none}
     <div class="section-head">
       <h2>鸿雁来仪</h2>
       <button class="refresh" id="btnRefreshInbox">手动探信</button>
+    </div>
+    <!-- 微信通知横幅（未绑定时醒目显示） -->
+    <div class="wx-banner" id="wxBanner" hidden>
+      <div class="wx-banner-main">
+        <div class="wx-banner-t1">开启微信通知，信到即刻提醒</div>
+        <div class="wx-banner-t2">不开启将不会收到提示，信件到了只能自己进入网站查看，不会有任何提醒</div>
+      </div>
+      <button class="wx-banner-btn" id="btnWxOpen">立即开启</button>
+      <button class="wx-banner-skip" id="btnWxSkip" title="暂不开启">×</button>
     </div>
     <div class="msg-list" id="inboxList"></div>
     <div class="empty" id="inboxEmpty">
@@ -884,6 +931,38 @@ body.owner-open .tabbar{display:none}
     <div class="modal-actions">
       <button class="btn-cancel" id="btnMigrateCancel">取消</button>
       <button class="btn-danger" id="btnMigrateConfirm">迁移</button>
+    </div>
+  </div>
+</div>
+
+<!-- 微信通知绑定弹窗 -->
+<div class="modal-mask" id="wxModal">
+  <div class="modal">
+    <h3>微信通知</h3>
+    <div id="wxBindArea">
+      <div class="wx-warn">不开启将不会收到提示：信件到了、信使殒命，都只能自己进入网站查看，不会有任何提醒。</div>
+      <p class="wx-steps">
+        ① 微信搜索公众号「<b>WxPusher</b>」并关注<br>
+        ② 点公众号菜单「我的 → 我的UID」，复制UID<br>
+        ③ 将UID填到下方，绑定后即可收到提醒
+      </p>
+      <input type="text" id="wxUidInput" placeholder="UID_xxxxxxxx" maxlength="32" autocomplete="off" spellcheck="false">
+      <div class="modal-actions">
+        <button class="btn-cancel" id="btnWxCancel">取消</button>
+        <button class="btn-danger" id="btnWxBind">绑定</button>
+      </div>
+    </div>
+    <div id="wxBoundArea" hidden>
+      <p style="font-size:14px;color:var(--ink-soft)">✅ 已开启微信通知</p>
+      <p style="font-size:12px;color:var(--ink-faint)">新信在途 · 送达 · 信使殒命，均会微信提醒</p>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);margin-top:14px;cursor:pointer">
+        <input type="checkbox" id="wxRemarkSync" style="width:16px;height:16px"> 同步备注用于微信通知
+      </label>
+      <p style="font-size:11px;color:var(--ink-faint);text-align:left;margin-top:4px;letter-spacing:0;line-height:1.6">开启后，通知里显示你为联系人设置的备注；关闭则显示信箱号。备注仅存于你自己的通知设置，不会公开。</p>
+      <div class="modal-actions">
+        <button class="btn-danger" id="btnWxUnbind">解除绑定</button>
+        <button class="btn-cancel" id="btnWxClose">关闭</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1012,6 +1091,13 @@ const dom = {
   messengerBar: null,
   btnBackHome: $('btnBackHome'),
   btnGPS: $('btnGPS'),
+  wxModal: $('wxModal'), wxBindArea: $('wxBindArea'), wxBoundArea: $('wxBoundArea'),
+  wxUidInput: $('wxUidInput'),
+  btnWxCancel: $('btnWxCancel'), btnWxBind: $('btnWxBind'),
+  btnWxUnbind: $('btnWxUnbind'), btnWxClose: $('btnWxClose'),
+  wxRemarkSync: $('wxRemarkSync'),
+  wxBanner: $('wxBanner'), btnWxOpen: $('btnWxOpen'), btnWxSkip: $('btnWxSkip'),
+  btnWxEntry: $('btnWxEntry'),
   gpsBanner: $('gpsBanner'), btnGpsAllow: $('btnGpsAllow'), btnGpsSkip: $('btnGpsSkip'),
   ownerPanel: $('ownerPanel'), btnOwnerRefresh: $('btnOwnerRefresh'), btnOwnerBack: $('btnOwnerBack'),
   ownerFilterBox: $('ownerFilterBox'), ownerFilterStatus: $('ownerFilterStatus'),
@@ -1041,6 +1127,7 @@ function resetBox() {
   dom.boxNo.textContent = b;
   state.messages = []; state.sent = []; state.knownIds.clear();
   renderInbox(); renderSent(); destroyAllMaps();
+  refreshWxStatus(); // 新信箱需重新绑定微信通知
   toast('信箱已重置，旧号作废');
 }
 
@@ -1930,6 +2017,7 @@ function promptRemark(box) {
   overlay.querySelector('#remarkCancel').addEventListener('click', close);
   overlay.querySelector('#remarkClear').addEventListener('click', () => {
     setRemark(box, '');
+    uploadWxRemarks();
     toast('备注已清除');
     close();
     renderInbox(); renderSent();
@@ -1937,6 +2025,7 @@ function promptRemark(box) {
   overlay.querySelector('#remarkOk').addEventListener('click', () => {
     const name = input.value.trim();
     setRemark(box, name);
+    uploadWxRemarks();
     toast(name ? '备注已保存：' + name : '备注已清除');
     close();
     renderInbox(); renderSent();
@@ -1944,6 +2033,111 @@ function promptRemark(box) {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') overlay.querySelector('#remarkOk').click();
   });
+}
+
+/* ============================================================
+   微信通知（WxPusher）：绑定/解绑/横幅/备注同步
+   绑定关系存 Worker KV（wxuid:{box}），一个UID可绑多个信箱，
+   迁移信箱后旧号的通知仍会送达，无需先解绑。
+   ============================================================ */
+const WX_SYNC_KEY = 'pigeon_wx_remark_sync';
+const WX_BANNER_KEY = 'pigeon_wx_banner_dismissed';
+let wxNotified = false; // 当前信箱是否已绑定微信通知
+
+function wxSyncEnabled() { return localStorage.getItem(WX_SYNC_KEY) === '1'; }
+
+function updateWxBanner() {
+  const dismissed = sessionStorage.getItem(WX_BANNER_KEY) === '1';
+  dom.wxBanner.hidden = wxNotified || dismissed;
+}
+
+async function refreshWxStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/wx/status?box=${state.box}`);
+    const data = await res.json();
+    wxNotified = !!data.bound;
+  } catch (e) { return; }
+  updateWxBanner();
+}
+
+function openWxModal() {
+  dom.wxBindArea.hidden = wxNotified;
+  dom.wxBoundArea.hidden = !wxNotified;
+  dom.wxRemarkSync.checked = wxSyncEnabled();
+  dom.wxModal.classList.add('show');
+}
+function closeWxModal() { dom.wxModal.classList.remove('show'); }
+
+dom.btnWxEntry.addEventListener('click', openWxModal);
+dom.btnWxOpen.addEventListener('click', openWxModal);
+dom.btnWxSkip.addEventListener('click', () => {
+  sessionStorage.setItem(WX_BANNER_KEY, '1');
+  dom.wxBanner.hidden = true;
+});
+dom.wxModal.addEventListener('click', (e) => { if (e.target === dom.wxModal) closeWxModal(); });
+dom.btnWxCancel.addEventListener('click', closeWxModal);
+dom.btnWxClose.addEventListener('click', closeWxModal);
+
+dom.btnWxBind.addEventListener('click', async () => {
+  const uid = dom.wxUidInput.value.trim();
+  if (!/^UID_[A-Za-z0-9_-]{4,}$/i.test(uid)) {
+    toast('UID 以 UID_ 开头，见公众号菜单「我的-我的UID」');
+    return;
+  }
+  dom.btnWxBind.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/wx/bind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ box: state.box, uid })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || '绑定失败'); return; }
+    wxNotified = true;
+    dom.wxUidInput.value = '';
+    dom.wxBanner.hidden = true;
+    toast('微信通知已开启');
+    uploadWxRemarks(); // 若之前开过备注同步，绑定后立即上传
+    openWxModal(); // 切到已绑定视图
+  } catch (e) {
+    toast('网络错误，稍后再试');
+  } finally {
+    dom.btnWxBind.disabled = false;
+  }
+});
+
+dom.btnWxUnbind.addEventListener('click', async () => {
+  try {
+    await fetch(`${API_BASE}/wx/unbind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ box: state.box })
+    });
+    wxNotified = false;
+    toast('已关闭微信通知');
+    updateWxBanner();
+    openWxModal(); // 切回未绑定视图
+  } catch (e) {
+    toast('网络错误');
+  }
+});
+
+dom.wxRemarkSync.addEventListener('change', () => {
+  localStorage.setItem(WX_SYNC_KEY, dom.wxRemarkSync.checked ? '1' : '0');
+  uploadWxRemarks();
+  toast(dom.wxRemarkSync.checked ? '通知将显示你的备注' : '通知将显示信箱号');
+});
+
+// 上传备注到服务端（仅用于发给你本人的微信通知；关闭同步/清空时清除服务端数据）
+async function uploadWxRemarks() {
+  try {
+    const remarks = wxSyncEnabled() ? getRemarks() : {};
+    await fetch(`${API_BASE}/wx/remarks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ box: state.box, remarks })
+    });
+  } catch (e) {}
 }
 
 /* 收件箱：删除（仅自己页面，调 Worker 删 inbox 索引） */
@@ -2861,9 +3055,37 @@ async function loadMyName() {
   } catch(e) {}
 }
 
-/* ---------- 返回主站 ---------- */
+/* ---------- 返回主站/退出 ---------- */
+// 从主页点进来的 → 返回主页；直接打开 /chat 的 → 直接退出
 dom.btnBackHome.addEventListener('click', () => {
-  location.href = '/';
+  // 判断是否从本站主页进入
+  let fromHome = false;
+  try {
+    const ref = document.referrer || '';
+    if (ref) {
+      const u = new URL(ref);
+      const p = u.pathname.replace(/\/+$/, '') || '/';
+      fromHome = u.origin === location.origin && (p === '/' || /^\/index\.html$/i.test(p));
+    }
+  } catch (e) {}
+  if (fromHome) {
+    if (history.length > 1) history.back();
+    else location.href = '/';
+    return;
+  }
+  // 直接打开 /chat → 直接退出（微信内关闭网页，浏览器内关闭标签/后退）
+  if (/MicroMessenger/i.test(navigator.userAgent)) {
+    if (typeof WeixinJSBridge !== 'undefined') {
+      try { WeixinJSBridge.call('closeWindow'); } catch (e) {}
+    } else {
+      document.addEventListener('WeixinJSBridgeReady', () => {
+        try { WeixinJSBridge.call('closeWindow'); } catch (e) {}
+      }, { once: true });
+    }
+    return;
+  }
+  try { window.close(); } catch (e) {}
+  if (history.length > 1) history.back();
 });
 
 /* ============================================================
@@ -2994,6 +3216,7 @@ dom.btnOwnerBack.addEventListener('click', () => {
   loadNames();
   loadMyName();
   initGPS();  // 静默获取定位，用于收件箱补全 toGPS
+  refreshWxStatus(); // 检查微信通知绑定状态，控制横幅显示
   dom.customTime.value = toLocalInput(new Date(Date.now() + 24 * 3600 * 1000));
   renderMessengerBar();
   // URL 参数：?box=XXX 自动填收件人
