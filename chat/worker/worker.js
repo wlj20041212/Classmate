@@ -177,30 +177,40 @@ async function getWxAccessToken(env) {
 // 模板定义需为四行：{{first.DATA}}\n{{keyword1.DATA}}\n{{keyword2.DATA}}\n{{remark.DATA}}
 async function wxPush(env, openid, firstLine, keyword1, keyword2) {
   if (!openid || !env.WX_TEMPLATE_ID) return { ok: false, msg: '未配置' };
-  const token = await getWxAccessToken(env);
+  let token = await getWxAccessToken(env);
   if (!token) return { ok: false, msg: 'token获取失败' };
-  try {
-    const body = {
-      touser: openid,
-      template_id: env.WX_TEMPLATE_ID,
-      url: SITE_URL,
-      data: {
-        first: { value: firstLine || '', color: '#b3432b' },
-        keyword1: { value: keyword1 || '' },
-        keyword2: { value: keyword2 || '' },
-        remark: { value: SUPPORT_LINE, color: '#9a8a72' },
-      },
-    };
-    const res = await fetch(`${WX_API}/cgi-bin/message/template/send?access_token=${token}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    return data.errcode === 0 ? { ok: true } : { ok: false, msg: (data.errcode || '') + ' ' + (data.errmsg || '') };
-  } catch (e) {
-    return { ok: false, msg: '网络错误' };
+  for (let i = 0; i < 2; i++) {
+    try {
+      const body = {
+        touser: openid,
+        template_id: env.WX_TEMPLATE_ID,
+        url: SITE_URL,
+        data: {
+          first: { value: firstLine || '', color: '#b3432b' },
+          keyword1: { value: keyword1 || '' },
+          keyword2: { value: keyword2 || '' },
+          remark: { value: SUPPORT_LINE, color: '#9a8a72' },
+        },
+      };
+      const res = await fetch(`${WX_API}/cgi-bin/message/template/send?access_token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.errcode === 0) return { ok: true };
+      // token 失效（40001/40014）：清缓存强刷后重试一次
+      if ((data.errcode === 40001 || data.errcode === 40014) && i === 0) {
+        try { await env.MESSAGES.delete(WX_TOKEN_CACHE); } catch (e) {}
+        token = await getWxAccessToken(env);
+        if (token) continue;
+      }
+      return { ok: false, msg: (data.errcode || '') + ' ' + (data.errmsg || '') };
+    } catch (e) {
+      return { ok: false, msg: '网络错误' };
+    }
   }
+  return { ok: false, msg: 'token获取失败' };
 }
 
 // 微信回调：GET 验证服务器（echostr）；POST 接收事件（扫码关注自动绑定）
@@ -422,6 +432,7 @@ export default {
     if (path === '/api/wx/unbind' && method === 'POST') return handleWxUnbind(request, env);
     if (path === '/api/wx/status' && method === 'GET') return handleWxStatus(request, env, url);
     if (path === '/api/wx/remarks' && method === 'POST') return handleWxRemarks(request, env);
+    if (path === '/api/wx/test-send' && method === 'GET') return handleWxTestSend(request, env, url);
 
     // owner 接口
     if (path === '/api/owner-login' && method === 'POST') return handleOwnerLogin(request, env);
@@ -953,6 +964,19 @@ async function handleWxRemarks(request, env) {
   } catch (e) {
     return json({ error: '保存失败' }, 500);
   }
+}
+
+// ============ 微信通知：测试推送（验证模板字段显示是否完整） ============
+async function handleWxTestSend(request, env, url) {
+  const b = (url.searchParams.get('box') || '').toUpperCase();
+  if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
+  const openid = await getWxOpenid(env, b);
+  if (!openid) return json({ error: '该信箱未绑定微信' }, 400);
+  const r = await wxPush(env, openid,
+    '飞鸽传书 · 测试通知',
+    '这是一条测试消息，用于验证模板各字段是否正常显示',
+    toBJTime(Date.now()) + ' · 若能看到此行说明 keyword2 正常');
+  return json(r.ok ? { ok: true } : { ok: false, error: r.msg }, r.ok ? 200 : 500);
 }
 
 /**
