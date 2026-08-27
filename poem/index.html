@@ -1005,8 +1005,24 @@ function showDetail(no){
   document.getElementById('btnReview').addEventListener('click', ()=>doReview());
   document.getElementById('btnNote').addEventListener('click', toggleJianzhu);
 
+  // 已保存的笺注 → 详情页下方直接展示
+  renderSavedJianzhu();
+
   document.body.classList.add('detail-open');
   window.scrollTo({top:0});
+}
+
+// 渲染已保存的笺注展示盒（详情页下方）
+function renderSavedJianzhu(){
+  document.getElementById('box-jianzhu-view')?.remove();
+  const saved = localStorage.getItem(jianzhuKey());
+  if(!saved) return;
+  const box = document.createElement('div');
+  box.className = 'ai-box';
+  box.id = 'box-jianzhu-view';
+  box.innerHTML = '<div class="ai-box-title"><b>笺 · 吾之札记</b><span class="ai-box-tag">本机</span></div>'
+    + '<div class="ai-box-content">' + renderMdLite(saved) + '</div>';
+  document.getElementById('detailOutput').appendChild(box);
 }
 
 // 构建提示词：标题+体式+公元纪年+注释+诗句
@@ -1152,6 +1168,7 @@ function toggleJianzhu(){
     localStorage.setItem(jianzhuKey(), document.getElementById('jianzhuArea').value.trim());
     document.getElementById('jianzhuSave').textContent = '已存 ✓';
     setTimeout(()=>{ const b = document.getElementById('jianzhuSave'); if(b) b.textContent = '存 笺'; }, 1600);
+    renderSavedJianzhu(); // 同步刷新详情页下方的展示
   });
 }
 
