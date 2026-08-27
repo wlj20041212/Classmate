@@ -359,6 +359,7 @@ body{
 /* ===== Poem detail view ===== */
 .detail-view{display:none;padding:8px 0 80px}
 body.detail-open .hero,body.detail-open .toolbar,body.detail-open .poem-list{display:none}
+body.detail-open .back-btn{display:none}
 body.detail-open .detail-view{display:block}
 .detail-head{
   display:flex;align-items:baseline;flex-wrap:wrap;
@@ -456,8 +457,53 @@ body.detail-open .detail-view{display:block}
   font-size:0.95rem;
   line-height:1.95;
   color:var(--ink-soft);
-  white-space:pre-wrap;
   word-break:break-word;
+}
+/* Markdown 元素样式 */
+.ai-box-content .md-p{margin:0 0 .5em}
+.ai-box-content .md-p:last-child{margin-bottom:0}
+.md-h{
+  font-weight:700;
+  color:var(--ink);
+  margin:.9em 0 .4em;
+  letter-spacing:.04em;
+}
+.md-li{margin:.25em 0 .25em .5em}
+.md-ol{color:var(--cinnabar);font-variant-numeric:tabular-nums}
+.md-table{
+  width:100%;
+  border-collapse:collapse;
+  margin:.6em 0 1em;
+  font-size:0.86rem;
+  line-height:1.6;
+}
+.md-table th{
+  background:color-mix(in oklch, var(--paper-deep) 65%, transparent);
+  color:var(--ink);
+  font-weight:700;
+  padding:6px 10px;
+  text-align:left;
+  border:1px solid var(--hair-strong);
+  white-space:nowrap;
+}
+.md-table td{
+  padding:6px 10px;
+  border:1px solid var(--hair);
+  color:var(--ink-soft);
+}
+.md-hr{
+  border:none;
+  border-top:1px solid var(--hair);
+  margin:.9em 0;
+}
+.md-quote{
+  margin:.6em 0;
+  padding:.35em 1em;
+  border-left:3px solid var(--cinnabar-soft);
+  background:color-mix(in oklch, var(--paper-deep) 35%, transparent);
+  border-radius:0 8px 8px 0;
+  color:var(--ink);
+  font-style:italic;
 }
 .ai-box-content strong{color:var(--ink)}
 .ai-box-content code{
@@ -594,6 +640,8 @@ footer{
   .action-btn{padding:7px 16px;font-size:0.84rem;letter-spacing:0.06em}
   .ai-box{padding:14px 14px 12px;margin-top:14px}
   .ai-box-content{font-size:0.88rem;line-height:1.85}
+  .md-table{font-size:0.76rem;margin:.5em 0 .8em}
+  .md-table th,.md-table td{padding:4px 6px;white-space:normal}
   .jianzhu-area{min-height:110px;font-size:0.88rem}
 }
 @media (max-width:380px){
@@ -940,16 +988,77 @@ const AI_SYSTEM_PROMPT = '你是一位精通古典诗词的学者，擅长诗词
 
 let currentDetail = null; // 当前详情诗对象
 
-// 简易 Markdown 渲染（加粗/换行，去除#号标题等残留符号）
+// Markdown 渲染（支持表格/分割线/引用/列表/标题/加粗）
 function renderMdLite(text){
-  let h = esc(text);
-  // 行首 # 号标题（AI常输出）：去掉#号，保留标题文字
-  h = h.replace(/^#{1,6}\s*/gm, '');
-  // 行首 - 或 * 的列表符号
-  h = h.replace(/^[\s]*[-*]\s+/gm, '');
-  h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  return h;
+  const lines = String(text).replace(/\r\n/g,'\n').split('\n');
+  const out = [];
+  let i = 0;
+  const inline = s => s
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+  while(i < lines.length){
+    const line = lines[i];
+
+    // 空行跳过（连续空行只留一处换行）
+    if(!line.trim()){ i++; continue; }
+
+    // 表格：| a | b | 连续行 + 分隔行
+    if(/^\s*\|.*\|\s*$/.test(line)){
+      const rows = [];
+      while(i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){
+        rows.push(lines[i].trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()));
+        i++;
+      }
+      // 去掉 |---|---| 分隔行
+      const body = rows.filter(r => !r.every(c => /^:?-{2,}:?$/.test(c) || c===''));
+      if(body.length){
+        out.push('<table class="md-table"><thead><tr>' + body[0].map(c=>'<th>'+inline(c)+'</th>').join('') + '</tr></thead><tbody>'
+          + body.slice(1).map(r=>'<tr>' + r.map(c=>'<td>'+inline(c)+'</td>').join('') + '</tr>').join('')
+          + '</tbody></table>');
+      }
+      continue;
+    }
+
+    // 分割线 --- / ***
+    if(/^\s*([-*_])\s*(\1\s*){2,}$/.test(line)){ out.push('<hr class="md-hr">'); i++; continue; }
+
+    // 引用 >
+    if(/^\s*>\s?/.test(line)){
+      const buf = [];
+      while(i < lines.length && /^\s*>\s?/.test(lines[i])){
+        buf.push(lines[i].replace(/^\s*>\s?/,'')); i++;
+      }
+      out.push('<blockquote class="md-quote">' + inline(esc(buf.join(' '))) + '</blockquote>');
+      continue;
+    }
+
+    // 标题 #~######
+    const hm = line.match(/^\s*#{1,6}\s+(.*)$/);
+    if(hm){ out.push('<div class="md-h">' + inline(esc(hm[1])) + '</div>'); i++; continue; }
+
+    // 有序列表 1.
+    const om = line.match(/^\s*(\d+)[.、)]\s+(.*)$/);
+    if(om){ out.push('<div class="md-li"><b class="md-ol">' + om[1] + '.</b> ' + inline(esc(om[2])) + '</div>'); i++; continue; }
+
+    // 无序列表 - /
+    const um = line.match(/^\s*[-*•]\s+(.*)$/);
+    if(um){ out.push('<div class="md-li">· ' + inline(esc(um[1])) + '</div>'); i++; continue; }
+
+    // 普通段落
+    const buf = [];
+    while(i < lines.length && lines[i].trim()
+      && !/^\s*\|.*\|\s*$/.test(lines[i])
+      && !/^\s*([-*_])\s*(\1\s*){2,}$/.test(lines[i])
+      && !/^\s*>\s?/.test(lines[i])
+      && !/^\s*#{1,6}\s+/.test(lines[i])
+      && !/^\s*\d+[.、)]\s+/.test(lines[i])
+      && !/^\s*[-*•]\s+/.test(lines[i])){
+      buf.push(lines[i]); i++;
+    }
+    out.push('<p class="md-p">' + inline(esc(buf.join(' '))) + '</p>');
+  }
+  return out.join('');
 }
 
 // 点击诗篇 → 进入详情
@@ -1040,7 +1149,9 @@ function buildPrompt(p, task){
   if(p.note) s += '注释：' + p.note + '\n';
   if(p.epigraph) s += '题记：' + p.epigraph + '\n';
   s += '\n' + p.lines.join('\n') + '\n\n';
-  s += task === 'trans' ? '请翻译这首诗。' : '请评价这首诗。';
+  s += task === 'trans'
+    ? '请把这首诗翻译成现代白话文，只输出中文白话文翻译，不要输出英文或其他语言，不要额外解释。'
+    : '请评价这首诗。';
   return s;
 }
 
