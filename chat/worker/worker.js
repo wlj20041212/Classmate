@@ -173,24 +173,28 @@ async function getWxAccessToken(env) {
 // 推送一条模板消息通知；返回 {ok, msg}
 // 模板内容（测试号新增模板时填写）：
 //   {{first.DATA}}\n{{content.DATA}}\n{{remark.DATA}}
-async function wxPush(env, openid, title, content) {
+// wxPush: 三行模板消息（first/keyword1/keyword2/remark）
+// 模板定义需为四行：{{first.DATA}}\n{{keyword1.DATA}}\n{{keyword2.DATA}}\n{{remark.DATA}}
+async function wxPush(env, openid, firstLine, keyword1, keyword2) {
   if (!openid || !env.WX_TEMPLATE_ID) return { ok: false, msg: '未配置' };
   const token = await getWxAccessToken(env);
   if (!token) return { ok: false, msg: 'token获取失败' };
   try {
+    const body = {
+      touser: openid,
+      template_id: env.WX_TEMPLATE_ID,
+      url: SITE_URL,
+      data: {
+        first: { value: firstLine || '', color: '#b3432b' },
+        keyword1: { value: keyword1 || '' },
+        keyword2: { value: keyword2 || '' },
+        remark: { value: SUPPORT_LINE, color: '#9a8a72' },
+      },
+    };
     const res = await fetch(`${WX_API}/cgi-bin/message/template/send?access_token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        touser: openid,
-        template_id: env.WX_TEMPLATE_ID,
-        url: SITE_URL,
-        data: {
-          first: { value: title, color: '#b3432b' },
-          content: { value: content },
-          remark: { value: SUPPORT_LINE, color: '#9a8a72' },
-        },
-      }),
+      body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     return data.errcode === 0 ? { ok: true } : { ok: false, msg: (data.errcode || '') + ' ' + (data.errmsg || '') };
@@ -232,7 +236,8 @@ async function handleWxCallback(request, env, url) {
             if (!boxes.includes(key)) { boxes.push(key); await env.MESSAGES.put('wxuser:' + openid, JSON.stringify(boxes)); }
           } catch (e) {}
           await wxPush(env, openid, '飞鸽传书 · 绑定成功',
-            '信箱 ' + key + ' 已开启微信通知\n新信在途、送达、信使殒命均会在此提醒你');
+            '信箱 ' + key + ' 已开启微信通知',
+            '新信在途、送达、信使殒命均会在此提醒你');
         }
       } else if (eventType === 'unsubscribe') {
         // 取关：清除该 openid 名下所有绑定（取关事件无 EventKey，需反向查找）
@@ -301,15 +306,15 @@ async function wxRegisterSend(env, msg) {
   if (toUid) {
     const rmk = await getWxRemarks(env, msg.to);
     await wxPush(env, toUid, '飞鸽传书 · 新信在途',
-      '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信正在飞来\n' +
-      '预计 ' + flyStr + ' 后抵达你的信箱\n寄出时间：' + sentTime);
+      '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信正在飞来',
+      '预计 ' + flyStr + ' 后抵达 · 寄出时间：' + sentTime);
   }
   // 发件人：寄出回执（正在运送中）
   const fromUid = await getWxOpenid(env, msg.from);
   if (fromUid) {
     const rmk = await getWxRemarks(env, msg.from);
     await wxPush(env, fromUid, '飞鸽传书 · 送达回执',
-      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已发送，正在运送中\n' +
+      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已发送，正在运送中',
       '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
   }
 }
@@ -325,15 +330,14 @@ async function wxNotifyArrived(env, msg) {
     if (toUid) {
       const rmk = await getWxRemarks(env, msg.to);
       await wxPush(env, toUid, '飞鸽传书 · 信使殒命',
-        '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，信使途中殒命，未能送达\n' +
+        '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，信使途中殒命，未能送达',
         '死因：' + (msg.deathReason || '天有不测风云'));
     }
     if (fromUid) {
       const rmk = await getWxRemarks(env, msg.from);
       await wxPush(env, fromUid, '飞鸽传书 · 信使殒命',
-        '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信使途中殒命，信件未能送达\n' +
-        '死因：' + (msg.deathReason || '天有不测风云') + '\n' +
-        '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+        '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信使途中殒命，信件未能送达',
+        '死因：' + (msg.deathReason || '天有不测风云') + ' · 寄出时间：' + sentTime);
     }
     return;
   }
@@ -341,14 +345,14 @@ async function wxNotifyArrived(env, msg) {
   if (toUid) {
     const rmk = await getWxRemarks(env, msg.to);
     await wxPush(env, toUid, '飞鸽传书 · 新信件',
-      '你的信箱收到一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，纸短情长，速去查看\n' +
+      '你的信箱收到一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，纸短情长，速去查看',
       '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
   }
   // 送达：发件人回执
   if (fromUid) {
     const rmk = await getWxRemarks(env, msg.from);
     await wxPush(env, fromUid, '飞鸽传书 · 送达回执',
-      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已安全送达对方信箱\n' +
+      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已安全送达对方信箱',
       '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
   }
 }
