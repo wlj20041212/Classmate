@@ -392,8 +392,8 @@ export default {
     if (path === '/api/getname' && method === 'GET') return handleGetName(request, env, url);
     if (path === '/api/setname' && method === 'POST') return handleSetName(request, env);
 
-    // 微信通知（测试号）
-    if (path === '/wx/callback') return handleWxCallback(request, env, url);
+    // 微信通知（测试号）——回调同时兼容 /wx/callback 与 /api/wx/callback（前端域名走 /chat/api 前缀）
+    if (path === '/wx/callback' || path === '/api/wx/callback') return handleWxCallback(request, env, url);
     if (path === '/api/wx/qrcode' && method === 'GET') return handleWxQrcode(request, env, url);
     if (path === '/api/wx/unbind' && method === 'POST') return handleWxUnbind(request, env);
     if (path === '/api/wx/status' && method === 'GET') return handleWxStatus(request, env, url);
