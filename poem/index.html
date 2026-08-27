@@ -1156,9 +1156,14 @@ function showDetail(no){
     + '<p class="list-hint" style="margin-top:12px">点击上方按钮展开，再点一次即可收起</p>'
     + '<div class="detail-output" id="detailOutput"></div>'
     + '<div class="cache-clear-row">'
-    + '<button class="cache-clear-btn" type="button" id="btnClearCache">🧹 清理翻译与AI评诗缓存</button>'
+    + '<button class="cache-clear-btn" type="button" id="btnClearCache">🧹 清理本诗的翻译与AI评诗缓存</button>'
     + '<span class="cache-clear-hint">仅清翻译/评诗缓存，笺注保留</span>'
-    + '</div>';
+    + '</div>'
+    // 每个作者主页的第一首诗（默认逆序展示的第一首）额外提供清理全部缓存
+    + (isAuthorFirstPoem(p)
+        ? '<div class="cache-clear-row"><button class="cache-clear-btn" type="button" id="btnClearAllCache">🗑 清理全部诗的缓存</button>'
+          + '<span class="cache-clear-hint">全部翻译/评诗缓存，笺注保留</span></div>'
+        : '');
 
   document.getElementById('detailBack').addEventListener('click', ()=>{
     history.back();
@@ -1167,6 +1172,7 @@ function showDetail(no){
   document.getElementById('btnReview').addEventListener('click', ()=>doReview());
   document.getElementById('btnNote').addEventListener('click', toggleJianzhu);
   document.getElementById('btnClearCache').addEventListener('click', clearPoemCache);
+  document.getElementById('btnClearAllCache')?.addEventListener('click', clearAllPoemCache);
 
   // 已保存的笺注 → 详情页下方直接展示
   renderSavedJianzhu();
@@ -1189,6 +1195,12 @@ function renderSavedJianzhu(){
 }
 
 // 构建提示词：标题+体式+公元纪年+注释+诗句
+// 只给AI公元纪年：注释/题记中的宣德纪年一律剔除，避免AI误判朝代
+function stripEra(txt){
+  if(!txt) return '';
+  return txt.replace(/[，,、；;。]?\s*宣德[^\n，,。；;]*/g, '')
+    .replace(/^[，,、；;。]\s*/, '').replace(/\s*[，,、；;]$/, '').trim();
+}
 function buildPrompt(p, task){
   const year = String(p.create).slice(0,4);
   // 体式分类：词/古诗非格律诗，其余（五绝/七律等）为格律诗
@@ -1199,15 +1211,21 @@ function buildPrompt(p, task){
   let s = isWord ? '请看这阕词：\n' : '请看这首' + genreDesc + '：\n';
   s += '标题：' + p.title + '\n';
   s += '体式：' + genreDesc + '\n';
-  s += '创作时间：' + p.createLabel + '（公元' + year + '年）\n';
-  if(p.note) s += '注释：' + p.note + '\n';
-  if(p.epigraph) s += '题记：' + p.epigraph + '\n';
+  s += '创作时间：公元' + year + '年\n';
+  const noteClean = stripEra(p.note);
+  const epiClean = stripEra(p.epigraph);
+  if(noteClean) s += '注释：' + noteClean + '\n';
+  if(epiClean) s += '题记：' + epiClean + '\n';
   s += '\n' + p.lines.join('\n') + '\n\n';
   // 评诗注意：按实际体裁评价，禁止张冠李戴
   let reviewNote;
   if(isWord)      reviewNote = '这是一阕词，不是格律诗。请按词的规范点评（词牌句式、长短句错落、音律意境），不要称它为诗/绝句/律诗，更不要按近体诗平仄对仗去评判。';
   else if(isOld)  reviewNote = '这是古风诗，不是格律诗。不要用绝句/律诗称呼它，也不要按格律平仄对仗去评判。';
   else            reviewNote = '这是' + p.genre + '，属格律诗，可按平仄对仗要求点评。';
+  // 王乐江的格律诗：新韵创作，平仄无问题（古诗/词不涉及，不追加）
+  if(getCurrentAuthor().id === 'wlj' && !isWord && !isOld){
+    reviewNote += '此诗依新韵（中华新韵）创作，平仄无问题，请勿以平水韵挑刺、质疑出韵或平仄毛病。';
+  }
   s += task === 'trans'
     ? '请把这首' + (isWord ? '词' : genreDesc) + '翻译成现代白话文，只输出中文白话文翻译，不要输出英文或其他语言，不要额外解释。'
     : '请点评这首' + (isWord ? '词' : genreDesc) + '。注意：' + reviewNote;
@@ -1279,8 +1297,38 @@ function errorBox(box){
     '<span class="ai-error">⚠️ 乐江AI繁忙，请稍后重试~</span>';
 }
 
-// 清理翻译/AI评诗缓存（笺注 poemnote_* 不动）
+// 当前作者主页默认展示的第一首诗（逆序：最新在前，同日取编号小者）
+function isAuthorFirstPoem(p){
+  if(!POEMS.length) return false;
+  const first = POEMS.slice().sort((a,b)=>{
+    const d = b.create.localeCompare(a.create);
+    return d !== 0 ? d : a.no - b.no;
+  })[0];
+  return first.no === p.no;
+}
+
+// 清理当前这首诗的翻译/AI评诗缓存（其他诗的缓存与笺注 poemnote_* 均不动）
 function clearPoemCache(){
+  if(!currentDetail){ showCacheToast('请先进入一首诗的详情页'); return; }
+  const keys = ['trans','review'].map(t=>detailCacheKey(t));
+  const removed = keys.filter(k=>localStorage.getItem(k) !== null);
+  if(!removed.length){
+    showCacheToast('本诗暂无可清理的缓存');
+    return;
+  }
+  removed.forEach(k=>localStorage.removeItem(k));
+  // 移除已显示的翻译/评诗盒子，重置按钮态
+  ['trans','review'].forEach(t=>{
+    document.getElementById('box-'+t)?.remove();
+  });
+  ['btnTrans','btnReview'].forEach(id=>{
+    document.getElementById(id)?.classList.remove('active');
+  });
+  showCacheToast('已清理《' + currentDetail.title + '》的 ' + removed.length + ' 条缓存（笺注与其他诗不受影响）');
+}
+
+// 清理全部诗的翻译/AI评诗缓存（仅在每位作者第一首诗详情页提供，笺注 poemnote_* 不动）
+function clearAllPoemCache(){
   const keysToRemove = [];
   for(let i=0; i<localStorage.length; i++){
     const k = localStorage.key(i);
@@ -1291,14 +1339,13 @@ function clearPoemCache(){
     return;
   }
   keysToRemove.forEach(k=>localStorage.removeItem(k));
-  // 移除已显示的翻译/评诗盒子，重置按钮态
   ['trans','review'].forEach(t=>{
     document.getElementById('box-'+t)?.remove();
   });
   ['btnTrans','btnReview'].forEach(id=>{
     document.getElementById(id)?.classList.remove('active');
   });
-  showCacheToast('已清理 ' + keysToRemove.length + ' 条缓存（笺注不受影响）');
+  showCacheToast('已清理全部 ' + keysToRemove.length + ' 条翻译/评诗缓存（笺注不受影响）');
 }
 
 // 轻提示 toast
