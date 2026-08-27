@@ -244,12 +244,18 @@ body{
 .poem{cursor:pointer}
 .list-hint{
   margin:2px 0 6px;
-  font-size:0.76rem;
-  color:var(--ink-faint);
+  font-size:0.8rem;
+  color:var(--cinnabar);
   letter-spacing:0.14em;
   display:flex;align-items:center;gap:6px;
+  font-weight:600;
+  background:color-mix(in oklch, var(--cinnabar) 7%, transparent);
+  border:1px solid color-mix(in oklch, var(--cinnabar) 28%, transparent);
+  border-radius:999px;
+  padding:6px 14px;
+  width:fit-content;
 }
-.list-hint::before{content:"☞";color:var(--cinnabar-soft);font-size:0.85rem}
+.list-hint::before{content:"☞";color:var(--cinnabar);font-size:0.9rem}
 .poem-head{
   display:flex;
   align-items:baseline;
@@ -928,7 +934,7 @@ const detailView = document.getElementById('detailView');
 
 // ===== 乐江AI 配置（与 ai.html 同源，后台静默调用）=====
 const AI_URL   = 'https://api.agnes-ai.cn/v1/chat/completions';
-const AI_KEY   = 'sk-coiOt3YttnpJakJOLvsAhnt82ttTK8qq0TDOQaBwN38RULHj';
+const AI_KEY   = 'sk-coiOt3YttnpJakJOLvsAhnt82ttTK8qq0TDOQaBwN38MULHj';
 const AI_MODEL = 'agnes-2.5-flash';
 const AI_SYSTEM_PROMPT = '你是一位精通古典诗词的学者，擅长诗词翻译与鉴赏。回复用中文，条理清晰，语言雅致但通俗易懂。';
 
