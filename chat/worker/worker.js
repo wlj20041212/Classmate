@@ -225,9 +225,29 @@ async function handleWxCallback(request, env, url) {
         if (key.startsWith('qrscene_')) key = key.slice('qrscene_'.length);
         if (/^[A-HJ-NP-Z2-9]{6}$/.test(key)) {
           await env.MESSAGES.put(`wxopenid:${key}`, openid);
+          // 维护反向索引（取关时用，避免全KV list）
+          try {
+            const raw = await env.MESSAGES.get('wxuser:' + openid);
+            const boxes = raw ? JSON.parse(raw) : [];
+            if (!boxes.includes(key)) { boxes.push(key); await env.MESSAGES.put('wxuser:' + openid, JSON.stringify(boxes)); }
+          } catch (e) {}
           await wxPush(env, openid, '飞鸽传书 · 绑定成功',
             '信箱 ' + key + ' 已开启微信通知\n新信在途、送达、信使殒命均会在此提醒你');
         }
+      } else if (eventType === 'unsubscribe') {
+        // 取关：清除该 openid 名下所有绑定（取关事件无 EventKey，需反向查找）
+        // 全 KV list 有免费额度限制，改用绑定索引单key：wxuser:{openid} → [信箱号]
+        try {
+          const raw = await env.MESSAGES.get('wxuser:' + openid);
+          const boxes = raw ? JSON.parse(raw) : [];
+          for (const b of boxes) {
+            // 仅当该信箱确实绑定的是这个 openid 时才清除（防止误删他人绑定）
+            if ((await env.MESSAGES.get('wxopenid:' + b)) === openid) {
+              await env.MESSAGES.delete('wxopenid:' + b);
+            }
+          }
+          await env.MESSAGES.delete('wxuser:' + openid);
+        } catch (e) {}
       }
     } catch (e) {}
     return new Response('success');
