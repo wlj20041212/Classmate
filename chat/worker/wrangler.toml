@@ -29,9 +29,9 @@ crons = ["* * * * *"]
 # 消息存储 KV
 [[kv_namespaces]]
 binding = "MESSAGES"
-id = "在这里填入你的消息KV命名空间ID"
+id = "f2bd5339a757492b8992b1ced068ff53"
 
 # 兑换码 KV
 [[kv_namespaces]]
 binding = "CODES"
-id = "在这里填入你的兑换码KV命名空间ID"
+id = "0e325ac2a8674a57a3a30e415d061e97"
