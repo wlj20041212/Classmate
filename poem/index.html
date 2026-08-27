@@ -241,6 +241,15 @@ body{
   transition:all .28s cubic-bezier(.22,.68,.32,1);
 }
 .poem:hover::before{opacity:1;transform:scaleY(1)}
+.poem{cursor:pointer}
+.list-hint{
+  margin:2px 0 6px;
+  font-size:0.76rem;
+  color:var(--ink-faint);
+  letter-spacing:0.14em;
+  display:flex;align-items:center;gap:6px;
+}
+.list-hint::before{content:"☞";color:var(--cinnabar-soft);font-size:0.85rem}
 .poem-head{
   display:flex;
   align-items:baseline;
@@ -341,6 +350,164 @@ body{
   font-size:0.78rem;
 }
 
+/* ===== Poem detail view ===== */
+.detail-view{display:none;padding:8px 0 80px}
+body.detail-open .hero,body.detail-open .toolbar,body.detail-open .poem-list{display:none}
+body.detail-open .detail-view{display:block}
+.detail-head{
+  display:flex;align-items:baseline;flex-wrap:wrap;
+  gap:8px 14px;margin-bottom:6px;
+}
+.detail-title{
+  font-size:clamp(1.5rem,4vw,2rem);
+  font-weight:900;
+  letter-spacing:0.08em;
+}
+.detail-back{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-bottom:18px;
+  background:transparent;
+  border:1px solid var(--hair-strong);
+  border-radius:999px;
+  padding:6px 16px;
+  font-family:var(--serif);
+  font-size:0.85rem;
+  color:var(--ink-soft);
+  cursor:pointer;
+  letter-spacing:0.08em;
+  transition:all .2s;
+}
+.detail-back:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
+.detail-body{padding:12px 0 4px;max-width:52ch}
+.detail-body p{
+  font-size:clamp(1.08rem,2.4vw,1.22rem);
+  letter-spacing:0.05em;
+  line-height:2.05;
+  margin-bottom:2px;
+}
+.detail-actions{
+  display:flex;gap:10px;flex-wrap:wrap;
+  margin-top:26px;
+  padding-top:18px;
+  border-top:1px solid var(--hair);
+}
+.action-btn{
+  border:1.5px solid var(--hair-strong);
+  background:transparent;
+  border-radius:999px;
+  padding:9px 22px;
+  font-family:var(--serif);
+  font-size:0.92rem;
+  color:var(--ink-soft);
+  cursor:pointer;
+  letter-spacing:0.12em;
+  font-weight:600;
+  transition:all .2s;
+}
+.action-btn:hover{border-color:var(--cinnabar);color:var(--cinnabar);transform:translateY(-1px)}
+.action-btn.active{
+  background:var(--cinnabar);
+  border-color:var(--cinnabar);
+  color:color-mix(in oklch, var(--paper) 92%, white);
+}
+.detail-output{margin-top:8px}
+.ai-box{
+  margin-top:20px;
+  border:1px solid var(--hair-strong);
+  border-radius:14px;
+  padding:18px 20px 16px;
+  background:color-mix(in oklch, var(--paper-deep) 45%, transparent);
+  position:relative;
+  animation:riseIn .45s cubic-bezier(.22,.68,.32,1) forwards;
+}
+.ai-box::before{
+  content:"";
+  position:absolute;
+  left:-8px;top:14px;bottom:14px;
+  width:3px;
+  background:var(--cinnabar-soft);
+  border-radius:2px;
+}
+.ai-box-title{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:10px;
+}
+.ai-box-title b{
+  font-size:0.86rem;
+  letter-spacing:0.24em;
+  color:var(--cinnabar);
+  font-weight:700;
+}
+.ai-box-tag{
+  font-size:0.68rem;
+  color:var(--ink-faint);
+  letter-spacing:0.1em;
+  border:1px solid var(--hair-strong);
+  border-radius:999px;
+  padding:1px 9px;
+}
+.ai-box-content{
+  font-size:0.95rem;
+  line-height:1.95;
+  color:var(--ink-soft);
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.ai-box-content strong{color:var(--ink)}
+.ai-box-content code{
+  background:color-mix(in oklch, var(--paper-deep) 70%, transparent);
+  border-radius:4px;
+  padding:0 5px;
+  font-size:0.86em;
+}
+.ai-loading{
+  display:flex;align-items:center;gap:10px;
+  color:var(--ink-faint);
+  font-size:0.9rem;
+  letter-spacing:0.1em;
+}
+.ai-loading .typing-indicator{display:inline-flex;gap:4px}
+.ai-loading .typing-indicator span{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--cinnabar-soft);
+  animation:typingBounce 1.2s infinite ease-in-out;
+}
+.ai-loading .typing-indicator span:nth-child(2){animation-delay:.15s}
+.ai-loading .typing-indicator span:nth-child(3){animation-delay:.3s}
+@keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-5px);opacity:1}}
+.ai-error{color:var(--cinnabar);font-size:0.9rem;letter-spacing:0.05em}
+.jianzhu-area{
+  width:100%;
+  min-height:140px;
+  border:1px solid var(--hair-strong);
+  border-radius:10px;
+  background:color-mix(in oklch, var(--paper) 80%, transparent);
+  padding:12px 14px;
+  font-family:var(--serif);
+  font-size:0.94rem;
+  line-height:1.9;
+  color:var(--ink);
+  resize:vertical;
+  outline:none;
+  transition:border-color .25s;
+}
+.jianzhu-area:focus{border-color:var(--cinnabar-soft)}
+.jianzhu-save{
+  margin-top:10px;
+  border:1.5px solid var(--cinnabar-soft);
+  background:transparent;
+  border-radius:999px;
+  padding:6px 20px;
+  font-family:var(--serif);
+  font-size:0.85rem;
+  color:var(--cinnabar);
+  cursor:pointer;
+  letter-spacing:0.1em;
+  transition:all .2s;
+}
+.jianzhu-save:hover{background:var(--cinnabar);color:color-mix(in oklch, var(--paper) 92%, white)}
+.jianzhu-hint{margin-top:8px;font-size:0.74rem;color:var(--ink-faint);letter-spacing:0.05em}
+
 /* ===== Empty ===== */
 .empty{
   text-align:center;
@@ -412,6 +579,16 @@ footer{
   .poem-body{padding:4px 0 2px}
   .poem-body p{font-size:clamp(0.95rem,3vw,1.05rem);line-height:1.75;letter-spacing:0.02em;margin-bottom:1px}
   .poem-note{margin-top:8px;font-size:0.76rem;line-height:1.65}
+  /* 详情视图 */
+  .detail-view{padding:4px 0 60px}
+  .detail-back{margin-bottom:12px;padding:5px 14px;font-size:0.8rem}
+  .detail-title{font-size:clamp(1.3rem,5vw,1.7rem)}
+  .detail-body p{font-size:clamp(1rem,3.4vw,1.1rem);line-height:1.9}
+  .detail-actions{gap:8px;margin-top:18px;padding-top:14px}
+  .action-btn{padding:7px 16px;font-size:0.84rem;letter-spacing:0.06em}
+  .ai-box{padding:14px 14px 12px;margin-top:14px}
+  .ai-box-content{font-size:0.88rem;line-height:1.85}
+  .jianzhu-area{min-height:110px;font-size:0.88rem}
 }
 @media (max-width:380px){
   .hero-stats{flex-wrap:wrap;gap:10px 16px}
@@ -482,6 +659,9 @@ footer{
   </nav>
 
   <main class="poem-list" id="poemList" aria-live="polite"></main>
+
+  <!-- 诗详情视图：点击诗篇进入 -->
+  <section class="detail-view" id="detailView" aria-live="polite"></section>
 
   <footer>
     <span id="footLeft">王乐江诗歌全集 · 共 <b id="footTotal">0</b> 首</span>
@@ -643,6 +823,11 @@ function applyAuthor(){
   statCi.textContent = POEMS.filter(p=>p.genre==='词').length;
 
   render();
+
+  // 详情路由：hash 带 &p=编号 时进入详情视图
+  const pm = location.hash.match(/p=(\d+)/);
+  if(pm) showDetail(parseInt(pm[1],10));
+  else hideDetail();
 }
 
 function render(){
@@ -676,11 +861,11 @@ function render(){
     return;
   }
 
-  listEl.innerHTML = filtered.map((p,i)=>{
+  listEl.innerHTML = '<p class="list-hint">轻触诗篇，可查看翻译 · AI评诗 · 笺注</p>' + filtered.map((p,i)=>{
     const linesHtml = p.lines.map(l=>'<p>'+esc(l)+'</p>').join('');
     const epi = p.epigraph ? '<div class="poem-epigraph">'+esc(p.epigraph)+'</div>' : '';
     const note = p.note ? '<div class="poem-note"><span class="note-mark">注</span>'+esc(p.note)+'</div>' : '';
-    return '<article class="poem" style="animation-delay:'+Math.min(i*45,360)+'ms">'
+    return '<article class="poem" data-no="'+p.no+'" style="animation-delay:'+Math.min(i*45,360)+'ms">'
       + '<div class="poem-head">'
       + '<span class="poem-no">' + String(p.displayNo).padStart(2,'0') + '</span>'
       + '<h2 class="poem-title">' + esc(p.title) + '</h2>'
@@ -735,6 +920,234 @@ backBtn.addEventListener('click', ()=>{
   if(history.length > 1) history.back();
   else location.href = '../index.html';
 });
+
+/* ============================================================
+   诗详情视图：翻译 / AI评诗 / 笺注
+   ============================================================ */
+const detailView = document.getElementById('detailView');
+
+// ===== 乐江AI 配置（与 ai.html 同源，后台静默调用）=====
+const AI_URL   = 'https://api.agnes-ai.cn/v1/chat/completions';
+const AI_KEY   = 'sk-coiOt3YttnpJakJOLvsAhnt82ttTK8qq0TDOQaBwN38RULHj';
+const AI_MODEL = 'agnes-2.5-flash';
+const AI_SYSTEM_PROMPT = '你是一位精通古典诗词的学者，擅长诗词翻译与鉴赏。回复用中文，条理清晰，语言雅致但通俗易懂。';
+
+let currentDetail = null; // 当前详情诗对象
+
+// 简易 Markdown 渲染（加粗/换行）
+function renderMdLite(text){
+  let h = esc(text);
+  h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  return h;
+}
+
+// 点击诗篇 → 进入详情
+listEl.addEventListener('click', e=>{
+  const art = e.target.closest('.poem'); if(!art) return;
+  const no = parseInt(art.dataset.no,10); if(!no) return;
+  const id = getCurrentAuthor().id;
+  history.pushState({a:id, p:no}, '', '#a='+id+'&p='+no);
+  applyAuthor();
+  window.scrollTo({top:0});
+});
+
+function hideDetail(){
+  document.body.classList.remove('detail-open');
+  detailView.innerHTML = '';
+  currentDetail = null;
+}
+
+function detailCacheKey(task){
+  return 'poemai_' + getCurrentAuthor().id + '_' + currentDetail.no + '_' + task;
+}
+function jianzhuKey(){
+  return 'poemnote_' + getCurrentAuthor().id + '_' + currentDetail.no;
+}
+
+function showDetail(no){
+  const p = POEMS.find(x=>x.no===no);
+  if(!p){ hideDetail(); return; }
+  currentDetail = p;
+
+  const linesHtml = p.lines.map(l=>'<p>'+esc(l)+'</p>').join('');
+  const epi = p.epigraph ? '<div class="poem-epigraph">'+esc(p.epigraph)+'</div>' : '';
+  const note = p.note ? '<div class="poem-note"><span class="note-mark">注</span>'+esc(p.note)+'</div>' : '';
+
+  detailView.innerHTML = ''
+    + '<button class="detail-back" type="button" id="detailBack">← 返回诗目</button>'
+    + '<div class="detail-head">'
+    + '<span class="poem-no">' + String(p.no).padStart(2,'0') + '</span>'
+    + '<h2 class="detail-title">' + esc(p.title) + '</h2>'
+    + '<span class="poem-genre '+genreClass(p.genre)+'">' + esc(p.genre) + '</span>'
+    + '<span class="poem-date">' + esc(p.createLabel) + '</span>'
+    + '</div>'
+    + epi
+    + '<div class="detail-body">' + linesHtml + '</div>'
+    + note
+    + '<div class="detail-actions">'
+    + '<button class="action-btn" type="button" id="btnTrans">译 · 翻译</button>'
+    + '<button class="action-btn" type="button" id="btnReview">鉴 · AI评诗</button>'
+    + '<button class="action-btn" type="button" id="btnNote">笺 · 笺注</button>'
+    + '</div>'
+    + '<div class="detail-output" id="detailOutput"></div>';
+
+  document.getElementById('detailBack').addEventListener('click', ()=>{
+    history.back();
+  });
+  document.getElementById('btnTrans').addEventListener('click', ()=>doTrans());
+  document.getElementById('btnReview').addEventListener('click', ()=>doReview());
+  document.getElementById('btnNote').addEventListener('click', toggleJianzhu);
+
+  document.body.classList.add('detail-open');
+  window.scrollTo({top:0});
+}
+
+// 构建提示词：标题+体式+公元纪年+注释+诗句
+function buildPrompt(p, task){
+  const year = String(p.create).slice(0,4);
+  let s = '请看这首诗：\n';
+  s += '标题：' + p.title + '\n';
+  s += '体式：' + p.genre + '\n';
+  s += '创作时间：' + p.createLabel + '（公元' + year + '年）\n';
+  if(p.note) s += '注释：' + p.note + '\n';
+  if(p.epigraph) s += '题记：' + p.epigraph + '\n';
+  s += '\n' + p.lines.join('\n') + '\n\n';
+  s += task === 'trans' ? '请翻译这首诗。' : '请评价这首诗。';
+  return s;
+}
+
+// 后台调用乐江AI（不弹窗，结果内嵌展示）
+async function callPoemAI(prompt){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 45000);
+  try{
+    const res = await fetch(AI_URL, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
+      signal: controller.signal,
+      headers: {
+        'Authorization': 'Bearer ' + AI_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: AI_SYSTEM_PROMPT },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        stream: false
+      })
+    });
+    if(!res.ok) throw new Error('busy');
+    const data = await res.json();
+    const reply = (data?.choices?.[0]?.message?.content || data?.response || '').trim();
+    if(!reply) throw new Error('empty');
+    return reply;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 生成/获取一个结果盒子（已存在则复用）
+function ensureBox(task, title){
+  let box = document.getElementById('box-' + task);
+  if(!box){
+    box = document.createElement('div');
+    box.className = 'ai-box';
+    box.id = 'box-' + task;
+    box.innerHTML = '<div class="ai-box-title"><b>' + title + '</b><span class="ai-box-tag"></span></div>'
+      + '<div class="ai-box-content"></div>';
+    document.getElementById('detailOutput').appendChild(box);
+  }
+  return box;
+}
+
+function fillBox(box, content, tag){
+  box.querySelector('.ai-box-tag').textContent = tag || '';
+  box.querySelector('.ai-box-content').innerHTML = renderMdLite(content);
+}
+
+function loadingBox(box, text){
+  box.querySelector('.ai-box-tag').textContent = '';
+  box.querySelector('.ai-box-content').innerHTML =
+    '<div class="ai-loading"><span class="typing-indicator"><span></span><span></span><span></span></span>' + esc(text) + '</div>';
+}
+
+function errorBox(box){
+  box.querySelector('.ai-box-content').innerHTML =
+    '<span class="ai-error">⚠️ 乐江AI繁忙，请稍后重试~</span>';
+}
+
+// 翻译：有固定翻译用固定，否则本地缓存，再否则调AI
+async function doTrans(){
+  const p = currentDetail; if(!p) return;
+  const box = ensureBox('trans', '译');
+  const btn = document.getElementById('btnTrans');
+  btn.classList.add('active');
+
+  if(p.trans){ fillBox(box, p.trans, '定译'); return; }
+
+  const cacheKey = detailCacheKey('trans');
+  const cached = localStorage.getItem(cacheKey);
+  if(cached){ fillBox(box, cached, '已缓存'); return; }
+
+  loadingBox(box, '乐江AI正在翻译…');
+  try{
+    const reply = await callPoemAI(buildPrompt(p, 'trans'));
+    localStorage.setItem(cacheKey, reply);
+    fillBox(box, reply, '乐江AI');
+  }catch(e){
+    errorBox(box);
+    btn.classList.remove('active');
+  }
+}
+
+// AI评诗：本地缓存优先
+async function doReview(){
+  const p = currentDetail; if(!p) return;
+  const box = ensureBox('review', '鉴');
+  const btn = document.getElementById('btnReview');
+  btn.classList.add('active');
+
+  const cacheKey = detailCacheKey('review');
+  const cached = localStorage.getItem(cacheKey);
+  if(cached){ fillBox(box, cached, '已缓存'); return; }
+
+  loadingBox(box, '乐江AI正在赏评…');
+  try{
+    const reply = await callPoemAI(buildPrompt(p, 'review'));
+    localStorage.setItem(cacheKey, reply);
+    fillBox(box, reply, '乐江AI');
+  }catch(e){
+    errorBox(box);
+    btn.classList.remove('active');
+  }
+}
+
+// 笺注：本地读写后感（不上传）
+function toggleJianzhu(){
+  const p = currentDetail; if(!p) return;
+  let box = document.getElementById('box-jianzhu');
+  if(box){ box.remove(); document.getElementById('btnNote').classList.remove('active'); return; }
+
+  document.getElementById('btnNote').classList.add('active');
+  box = ensureBox('jianzhu', '笺');
+  const saved = localStorage.getItem(jianzhuKey()) || '';
+  box.querySelector('.ai-box-content').innerHTML =
+    '<textarea class="jianzhu-area" id="jianzhuArea" placeholder="写写你的读后感、批注、联想……"></textarea>'
+    + '<button class="jianzhu-save" type="button" id="jianzhuSave">存 笺</button>'
+    + '<p class="jianzhu-hint">笺注仅保存在你的本机浏览器，不会上传</p>';
+  document.getElementById('jianzhuArea').value = saved;
+  document.getElementById('jianzhuSave').addEventListener('click', ()=>{
+    localStorage.setItem(jianzhuKey(), document.getElementById('jianzhuArea').value.trim());
+    document.getElementById('jianzhuSave').textContent = '已存 ✓';
+    setTimeout(()=>{ const b = document.getElementById('jianzhuSave'); if(b) b.textContent = '存 笺'; }, 1600);
+  });
+}
 
 // 初始化
 applyAuthor();
