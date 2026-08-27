@@ -2078,7 +2078,7 @@ async function loadWxQrcode() {
     dom.wxQrImg.src = data.qrcode;
     dom.wxQrImg.hidden = false;
     dom.wxQrTip.textContent = '扫码关注后，此窗口将自动完成绑定';
-    // 轮询绑定状态，扫码关注成功后自动切换
+    // 高频轮询绑定状态（1.5秒），扫码关注成功后自动切换
     stopWxPoll();
     wxPollTimer = setInterval(async () => {
       try {
@@ -2093,13 +2093,15 @@ async function loadWxQrcode() {
           openWxModal(); // 切到已绑定视图
         }
       } catch (e) {}
-    }, 3000);
+    }, 1500);
   } catch (e) {
     dom.wxQrTip.textContent = '网络错误，稍后再试';
   }
 }
 
-function openWxModal() {
+async function openWxModal() {
+  // 每次打开先实时查询绑定状态（扫码后回来再点开也能正确显示）
+  await refreshWxStatus();
   dom.wxBindArea.hidden = wxNotified;
   dom.wxBoundArea.hidden = !wxNotified;
   dom.wxRemarkSync.checked = wxSyncEnabled();
@@ -2107,6 +2109,11 @@ function openWxModal() {
   if (!wxNotified) loadWxQrcode(); // 未绑定时生成扫码二维码
 }
 function closeWxModal() { dom.wxModal.classList.remove('show'); stopWxPoll(); }
+
+// 从微信切回页面时，立即刷新绑定状态（扫码后回浏览器即见「已开启」）
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshWxStatus();
+});
 
 dom.btnWxEntry.addEventListener('click', openWxModal);
 dom.btnWxOpen.addEventListener('click', openWxModal);
