@@ -189,6 +189,71 @@ async function getWxRemarks(env, box) {
   if (!box) return {};
   try { return JSON.parse((await env.MESSAGES.get(`wxremark:${box}`)) || '{}'); } catch (e) { return {}; }
 }
+
+// ============ 信件附图存储：Durable Object（SQLite 版免费 5GB，单值≤2MB，请求100万次/天，无需开通 R2） ============
+export class ImgStore {
+  constructor(state, env) { this.state = state; }
+  async fetch(req) {
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id') || '';
+    if (!/^[a-z0-9]{8,20}$/.test(id)) return new Response('bad id', { status: 400 });
+    if (url.pathname === '/put') {
+      const buf = await req.arrayBuffer();
+      if (!buf || buf.byteLength === 0 || buf.byteLength > 2 * 1024 * 1024) return new Response('bad size', { status: 400 });
+      const type = req.headers.get('X-Img-Type') || 'image/jpeg';
+      await this.state.storage.put('img:' + id, buf);
+      await this.state.storage.put('type:' + id, type);
+      return new Response('ok');
+    }
+    if (url.pathname === '/get') {
+      const buf = await this.state.storage.get('img:' + id);
+      if (!buf) return new Response('not found', { status: 404 });
+      const type = (await this.state.storage.get('type:' + id)) || 'image/jpeg';
+      return new Response(buf, { headers: { 'Content-Type': type } });
+    }
+    return new Response('not found', { status: 404 });
+  }
+}
+
+// 上传附图：body 为图片二进制，存 ImgStore DO
+async function handleImgUpload(request, env) {
+  try {
+    const type = (request.headers.get('Content-Type') || '').split(';')[0];
+    if (!type.startsWith('image/')) return json({ error: '仅支持图片' }, 400);
+    const buf = await request.arrayBuffer();
+    if (!buf || buf.byteLength === 0) return json({ error: '空文件' }, 400);
+    if (buf.byteLength > 2 * 1024 * 1024) return json({ error: '图片过大（限2MB）' }, 400);
+    const id = genId();
+    const stub = env.IMG_STORE.get(env.IMG_STORE.idFromName('global'));
+    const r = await stub.fetch(`https://img/put?id=${id}`, { method: 'POST', headers: { 'X-Img-Type': type }, body: buf });
+    if (!r.ok) return json({ error: '存储失败' }, 500);
+    return json({ ok: true, id });
+  } catch (e) {
+    return json({ error: '上传失败' }, 500);
+  }
+}
+
+// 读取附图：强缓存，浏览器只拉一次
+async function handleImgGet(path, env) {
+  const id = path.split('/')[3] || '';
+  if (!/^[a-z0-9]{8,20}$/.test(id)) return new Response('bad id', { status: 400 });
+  try {
+    const stub = env.IMG_STORE.get(env.IMG_STORE.idFromName('global'));
+    const r = await stub.fetch(`https://img/get?id=${id}`);
+    if (!r.ok) return new Response('not found', { status: 404 });
+    const buf = await r.arrayBuffer();
+    const type = r.headers.get('Content-Type') || 'image/jpeg';
+    return new Response(buf, {
+      headers: {
+        'Content-Type': type,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        ...CORS,
+      },
+    });
+  } catch (e) {
+    return new Response('error', { status: 500 });
+  }
+}
 // 联系人显示：有备注 → 备注（信箱号）；无备注 → 信箱号
 function wxContactLabel(remarks, box) {
   const r = (remarks && remarks[box]) || '';
@@ -475,6 +540,8 @@ export default {
     // ---------- 路由 ----------
     // 公开接口
     if (path === '/api/send' && method === 'POST') return handleSend(request, env);
+    if (path === '/api/img/upload' && method === 'POST') return handleImgUpload(request, env);
+    if (path.startsWith('/api/img/') && method === 'GET') return handleImgGet(path, env);
     if (path === '/api/inbox' && method === 'GET') return handleInbox(request, env, url);
     if (path === '/api/sent' && method === 'GET') return handleSent(request, env, url);
     if (path === '/api/read' && method === 'POST') return handleRead(request, env);
@@ -510,6 +577,10 @@ async function handleSend(request, env) {
     const body = await request.json();
     const { to, content, flyHours, fromGPS, animal, petName, willDie, deathReason, deathIcon } = body;
     const from = body.from || '';
+    // 附图ID列表（最多3张，格式校验防注入）
+    const images = Array.isArray(body.images)
+      ? body.images.filter(i => typeof i === 'string' && /^[a-z0-9]{8,20}$/.test(i)).slice(0, 3)
+      : [];
 
     if (!to || !/^[A-HJ-NP-Z2-9]{6}$/.test(to)) return json({ error: '收件人信箱号无效' }, 400);
     if (to === from) return json({ error: '收件人不能是自己' }, 400);
@@ -536,6 +607,7 @@ async function handleSend(request, env) {
       createdAt: now,            // 发送时间
       status: 'flying',          // 状态：flying/delivered/read/recalled/dead
       readAt: null,
+      images,                    // 附图ID列表（存 ImgStore DO）
     };
 
     // 存入 KV：信件本身 + 索引（用 get/set 替代 list）
@@ -795,6 +867,7 @@ async function handleOwnerMessages(request, env, url) {
       petName: msg.petName,
       status: msg.status,
       deathReason: msg.deathReason,
+      images: msg.images || [],
       createdAt: toBJTime(msg.createdAt),
       deliverAt: toBJTime(msg.deliverAt),
       readAt: msg.readAt ? toBJTime(msg.readAt) : null,

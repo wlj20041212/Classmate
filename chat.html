@@ -388,6 +388,25 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 }
 .msg-body .colophon::after{content:"";width:26px;height:26px;background:var(--cinnabar);border-radius:3px;flex:0 0 auto;box-shadow:inset 0 0 0 2px rgba(245,240,230,.5);transform:rotate(-3deg)}
 .msg-body .read-note{font-size:11px;color:var(--ink-faint);margin-top:8px;text-align:right;letter-spacing:.08em}
+/* 写信页工具栏 + 附图 + emoji */
+.msg-tools{display:flex;gap:8px;margin-top:8px}
+.msg-tool-btn{padding:5px 14px;font-size:12px;letter-spacing:.08em;background:var(--paper-deep);color:var(--ink-soft);border:1px solid var(--paper-line);border-radius:16px;cursor:pointer}
+.msg-tool-btn:active{background:var(--gold);color:#fff}
+.img-thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.img-thumbs:empty{display:none}
+.img-thumb{position:relative;width:64px;height:64px;border-radius:6px;overflow:hidden;border:1px solid var(--paper-line);background:var(--paper-deep)}
+.img-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.img-thumb .rm{position:absolute;top:2px;right:2px;width:17px;height:17px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:11px;line-height:17px;text-align:center;cursor:pointer;border:none;padding:0}
+.emoji-panel{display:flex;flex-wrap:wrap;gap:2px;margin-top:8px;padding:8px;background:var(--paper-deep);border:1px solid var(--paper-line);border-radius:8px;max-height:132px;overflow-y:auto}
+.emoji-panel span{font-size:22px;padding:3px 4px;cursor:pointer;border-radius:4px}
+.emoji-panel span:hover{background:rgba(168,138,62,.18)}
+/* 信件附图 + 全屏查看 */
+.letter-imgs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.letter-imgs:empty{display:none}
+.letter-img{max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--paper-line);cursor:zoom-in;object-fit:cover;display:block}
+.owner-item .letter-img{max-width:100px;max-height:100px}
+.img-viewer{position:fixed;inset:0;background:rgba(20,16,12,.93);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.img-viewer img{max-width:94vw;max-height:90vh;border-radius:8px}
 .countdown-row{
   display:flex;align-items:center;gap:8px;padding:0 14px 4px;font-size:12.5px;color:var(--ink-soft);
 }
@@ -784,6 +803,13 @@ body.owner-open .tabbar{display:none}
         <textarea id="msgContent" maxlength="500" placeholder="写下你想捎给远方的话……"></textarea>
         <span class="char-count" id="charCount">0/500</span>
       </div>
+      <div class="msg-tools">
+        <button type="button" class="msg-tool-btn" id="btnImgAdd" title="附图（可发表情包，最多3张）">🖼 附图</button>
+        <button type="button" class="msg-tool-btn" id="btnEmoji" title="插入表情">😊 表情</button>
+        <input type="file" id="imgInput" accept="image/*" multiple hidden>
+      </div>
+      <div class="emoji-panel" id="emojiPanel" hidden></div>
+      <div class="img-thumbs" id="imgThumbs"></div>
     </div>
     <div class="field">
       <span class="field-label">鸽子飞行时长</span>
@@ -1086,6 +1112,8 @@ const dom = {
   msgContent: $('msgContent'), charCount: $('charCount'),
   durationGroup: $('durationGroup'), durationCustom: $('durationCustom'), customTime: $('customTime'),
   gpsNote: $('gpsNote'), gpsNoteText: $('gpsNoteText'), btnSend: $('btnSend'),
+  btnImgAdd: $('btnImgAdd'), imgInput: $('imgInput'), imgThumbs: $('imgThumbs'),
+  btnEmoji: $('btnEmoji'), emojiPanel: $('emojiPanel'),
   airborneCard: $('airborneCard'), btnAirborneGo: $('btnAirborneGo'),
   inboxList: $('inboxList'), inboxEmpty: $('inboxEmpty'), btnRefreshInbox: $('btnRefreshInbox'),
   sentList: $('sentList'), sentEmpty: $('sentEmpty'), btnRefreshSent: $('btnRefreshSent'),
@@ -1446,6 +1474,107 @@ function showGpsHint() {
   });
 }
 
+/* ---------- 写信：附图（可发表情包）+ emoji ---------- */
+let pendingImages = []; // [{blob, url}]
+const MAX_IMGS = 3;
+
+dom.btnImgAdd.addEventListener('click', () => dom.imgInput.click());
+dom.imgInput.addEventListener('change', async () => {
+  const files = [...dom.imgInput.files];
+  dom.imgInput.value = '';
+  for (const f of files) {
+    if (pendingImages.length >= MAX_IMGS) { toast('最多附图' + MAX_IMGS + '张'); break; }
+    if (!f.type.startsWith('image/')) continue;
+    const blob = await compressImg(f);
+    if (!blob) { toast('「' + (f.name || '图片') + '」过大，请换小图'); continue; }
+    pendingImages.push({ blob, url: URL.createObjectURL(blob) });
+  }
+  renderImgThumbs();
+});
+
+// 压缩：GIF ≤2MB 原样保留动图；其他缩到最长边1080px JPEG
+async function compressImg(file) {
+  const MAX = 2 * 1024 * 1024;
+  if (file.type === 'image/gif') return file.size <= MAX ? file : null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1080 / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.82));
+    bitmap.close && bitmap.close();
+    return blob || (file.size <= MAX ? file : null);
+  } catch (e) {
+    return file.size <= MAX ? file : null; // 部分机型不支持解码时原样上传
+  }
+}
+
+function renderImgThumbs() {
+  dom.imgThumbs.innerHTML = pendingImages.map((p, i) => `
+    <div class="img-thumb"><img src="${p.url}" alt=""><button type="button" class="rm" data-i="${i}" title="移除">×</button></div>`).join('');
+}
+dom.imgThumbs.addEventListener('click', (e) => {
+  const btn = e.target.closest('.rm');
+  if (!btn) return;
+  const i = +btn.dataset.i;
+  URL.revokeObjectURL(pendingImages[i].url);
+  pendingImages.splice(i, 1);
+  renderImgThumbs();
+});
+
+// 上传单张，返回图片ID
+async function uploadImg(blob) {
+  const res = await fetch(`${API_BASE}/img/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': blob.type || 'image/jpeg' },
+    body: blob,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.id) throw new Error(data.error || '上传失败');
+  return data.id;
+}
+function clearPendingImages() {
+  pendingImages.forEach(p => URL.revokeObjectURL(p.url));
+  pendingImages = [];
+  renderImgThumbs();
+}
+
+// emoji 面板（点击插入正文，光标处）
+const EMOJIS = '😀😄😂🥹😊😍🤔😭😅😆😉😇🥰😘😜🤗🤭😌😎🥳😴🥺😢😤😨🤯😬🙃😷🤒🤕🥴😵🤠🤡👻💀👽🙈🙉🙊😺😻😼😽💐🌹🌸🍀🌾🕊️💌📮✉️📜🪶🕯️🏮🎏🎐🎋🏞️🌙⭐️☀️⛅️🌧️❄️🔥🌊🏔️🦢🕊🐉🦅🐎🐈🐕'.match(/\p{Extended_Pictographic}(\u200D\p{Extended_Pictographic}|\uFE0F)*/gu) || [];
+dom.btnEmoji.addEventListener('click', () => { dom.emojiPanel.hidden = !dom.emojiPanel.hidden; });
+(function initEmojiPanel() {
+  const uniq = [...new Set(EMOJIS)];
+  dom.emojiPanel.innerHTML = uniq.map(e => `<span>${e}</span>`).join('');
+  dom.emojiPanel.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'SPAN') return;
+    const t = dom.msgContent, s = t.selectionStart || t.value.length, en = t.selectionEnd || s;
+    t.value = t.value.slice(0, s) + e.target.textContent + t.value.slice(en);
+    t.focus(); t.selectionStart = t.selectionEnd = s + e.target.textContent.length;
+    t.dispatchEvent(new Event('input'));
+    dom.emojiPanel.hidden = true;
+  });
+})();
+
+// 信件附图 HTML（收发页/owner 通用）
+function letterImgsHtml(images) {
+  if (!images || !images.length) return '';
+  return `<div class="letter-imgs">${images.map(id =>
+    `<img class="letter-img" src="${API_BASE}/img/${encodeURIComponent(id)}" loading="lazy" alt="附图">`).join('')}</div>`;
+}
+
+// 全屏查看大图（点击任意 letter-img 触发）
+document.addEventListener('click', (e) => {
+  if (e.target.classList && e.target.classList.contains('letter-img')) {
+    const v = document.createElement('div');
+    v.className = 'img-viewer';
+    v.innerHTML = `<img src="${e.target.src}" alt="">`;
+    v.addEventListener('click', () => v.remove());
+    document.body.appendChild(v);
+  }
+});
+
 /* ---------- 写信：发送 ---------- */
 dom.btnSend.addEventListener('click', sendMessage);
 async function sendMessage() {
@@ -1486,6 +1615,19 @@ async function sendMessage() {
   dom.btnSend.disabled = true;
   dom.btnSend.textContent = '正召' + animal.name + '…';
   try {
+    // 先上传附图（表情包/照片），拿到图片ID
+    let imageIds = [];
+    if (pendingImages.length) {
+      dom.btnSend.textContent = '正在装运图画…';
+      try {
+        for (const p of pendingImages) imageIds.push(await uploadImg(p.blob));
+      } catch (e) {
+        toast('图画装运失败，请稍后再试');
+        dom.btnSend.disabled = false;
+        dom.btnSend.textContent = '放飞信使';
+        return;
+      }
+    }
     // 若无定位且未提示过，弹一次提示（用户手势触发，手机会弹权限框）
     let fromGPS = lastGPS;
     if (!fromGPS && !gpsSendHinted) {
@@ -1502,7 +1644,7 @@ async function sendMessage() {
     const res = await fetch(`${API_BASE}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: state.box, to, content, flyHours, fromGPS, animal: animal.id, petName, willDie, deathReason, deathIcon })
+      body: JSON.stringify({ from: state.box, to, content, flyHours, fromGPS, animal: animal.id, petName, willDie, deathReason, deathIcon, images: imageIds })
     });
     if (!res.ok) throw new Error(res.status);
     const data = await res.json().catch(() => ({}));
@@ -1512,6 +1654,8 @@ async function sendMessage() {
     playLaunchAnimation(animal.id);
     dom.msgContent.value = '';
     dom.charCount.textContent = '0/500';
+    dom.emojiPanel.hidden = true;
+    clearPendingImages();
     if (willDie) {
       // 殒命：扣1只信使（阵亡）
       consumeDead(animal.id);
@@ -1900,6 +2044,7 @@ function buildInboxItem(m) {
     body.innerHTML = `
       <div class="paper">
         <div class="content">${esc(m.content || '')}</div>
+        ${letterImgsHtml(m.images)}
         <div class="colophon">${esc(remarkLabel(m.from || ''))} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
         ${m.status === 'read' && m.readAt ? `<div class="read-note">已展阅 · ${formatShort(m.readAt)}</div>` : ''}
       </div>`;
@@ -1963,6 +2108,7 @@ function buildInboxItem(m) {
           body.innerHTML = `
             <div class="paper">
               <div class="content">${esc(m.content || '')}</div>
+              ${letterImgsHtml(m.images)}
               <div class="colophon">${esc(remarkLabel(m.from || ''))} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
               <div class="read-note">已展阅 · ${formatShort(Date.now())}</div>
             </div>`;
@@ -2399,6 +2545,7 @@ function renderSent() {
       body.innerHTML = `
         <div class="paper">
           <div class="content">${esc(m.content || '')}</div>
+          ${letterImgsHtml(m.images)}
           <div class="colophon">致：${esc(remarkLabel(m.to || ''))} · ${m.deliverAt ? formatFull(m.deliverAt) : ''}</div>
           ${m.readAt ? `<div class="read-note">已展阅 · ${formatShort(m.readAt)}</div>` : '<div class="read-note" style="color:var(--ink-faint)">尚未展阅</div>'}
         </div>`;
@@ -3223,6 +3370,7 @@ function renderOwnerMessages(list) {
       <div class="oi-meta">信使：${ani.name}${m.petName ? '·' + m.petName : ''} · 发送：${m.createdAt} · 预达：${m.deliverAt}${m.readAt ? ' · 已读：' + m.readAt : ''}</div>
       ${gpsLine}
       <div class="oi-content">${esc(m.content || '')}</div>
+      ${letterImgsHtml(m.images)}
       ${m.status === 'dead' ? `<div class="oi-dead">殒命：${esc(m.deathReason || '未详')}</div>` : ''}
       <div class="oi-actions" style="margin-top:6px"><button class="oi-del" data-id="${m.id}" style="padding:4px 12px;background:var(--cinnabar);color:var(--paper);border:none;border-radius:4px;cursor:pointer;font-size:12px">删除此信</button></div>
     </div>`;
