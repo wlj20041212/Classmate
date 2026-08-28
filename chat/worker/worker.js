@@ -132,7 +132,8 @@ const WX_TOKEN_CACHE = 'wx_access_token_cache'; // access_token 缓存（2小时
 
 async function getWxOpenid(env, box) {
   if (!box) return '';
-  try { return (await env.MESSAGES.get(`wxopenid:${box}`)) || ''; } catch (e) { return ''; }
+  // cacheTtl:0 绕过边缘读缓存，降低扫码绑定后状态查询的延迟（KV跨节点传播仍最长约1分钟）
+  try { return (await env.MESSAGES.get(`wxopenid:${box}`, { cacheTtl: 0 })) || ''; } catch (e) { return ''; }
 }
 async function getWxRemarks(env, box) {
   if (!box) return {};

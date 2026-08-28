@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -2076,15 +2076,41 @@ function updateWxBanner() {
 
 async function refreshWxStatus() {
   try {
-    const res = await fetch(`${API_BASE}/wx/status?box=${state.box}`);
+    const res = await fetch(`${API_BASE}/wx/status?box=${state.box}`, { cache: 'no-store' });
     const data = await res.json();
     wxNotified = !!data.bound;
+    if (wxNotified) stopWxBgPoll();
   } catch (e) { return; }
   updateWxBanner();
 }
 
 let wxPollTimer = null;
+let wxBgPollTimer = null;
+let wxBgPollCount = 0;
 function stopWxPoll() { if (wxPollTimer) { clearInterval(wxPollTimer); wxPollTimer = null; } }
+function stopWxBgPoll() { if (wxBgPollTimer) { clearInterval(wxBgPollTimer); wxBgPollTimer = null; } }
+
+// 后台低频轮询：弹窗关闭后仍持续确认绑定（KV跨节点传播最长约1分钟，期间无需用户重复扫码）
+function startWxBgPoll() {
+  if (wxBgPollTimer) return;
+  wxBgPollCount = 0;
+  wxBgPollTimer = setInterval(async () => {
+    wxBgPollCount++;
+    if (wxBgPollCount > 40) return stopWxBgPoll(); // 约2分钟后放弃
+    try {
+      const r = await fetch(`${API_BASE}/wx/status?box=${state.box}`, { cache: 'no-store' });
+      const d = await r.json();
+      if (d.bound) {
+        stopWxBgPoll();
+        wxNotified = true;
+        updateWxBanner();
+        toast('微信通知已开启');
+        uploadWxRemarks(); // 若之前开过备注同步，绑定后立即上传
+        if (dom.wxModal.classList.contains('show')) openWxModal(); // 弹窗开着则切到已绑定视图
+      }
+    } catch (e) {}
+  }, 3000);
+}
 
 async function loadWxQrcode() {
   dom.wxQrBoxNo.textContent = state.box;
@@ -2096,15 +2122,16 @@ async function loadWxQrcode() {
     if (!res.ok || !data.qrcode) { dom.wxQrTip.textContent = data.error || '二维码生成失败，稍后再试'; return; }
     dom.wxQrImg.src = data.qrcode;
     dom.wxQrImg.hidden = false;
-    dom.wxQrTip.textContent = '扫码关注后，此窗口将自动完成绑定';
+    dom.wxQrTip.textContent = '扫码关注后自动完成绑定，刚扫码请稍候（约1分钟内生效）';
     // 高频轮询绑定状态（1.5秒），扫码关注成功后自动切换
     stopWxPoll();
     wxPollTimer = setInterval(async () => {
       try {
-        const r = await fetch(`${API_BASE}/wx/status?box=${state.box}`);
+        const r = await fetch(`${API_BASE}/wx/status?box=${state.box}`, { cache: 'no-store' });
         const d = await r.json();
         if (d.bound) {
           stopWxPoll();
+          stopWxBgPoll();
           wxNotified = true;
           dom.wxBanner.hidden = true;
           toast('微信通知已开启');
@@ -2126,12 +2153,21 @@ async function openWxModal() {
   dom.wxRemarkSync.checked = wxSyncEnabled();
   dom.wxModal.classList.add('show');
   if (!wxNotified) loadWxQrcode(); // 未绑定时生成扫码二维码
+  else stopWxPoll(); // 已绑定时停掉弹窗内轮询
 }
-function closeWxModal() { dom.wxModal.classList.remove('show'); stopWxPoll(); }
+function closeWxModal() {
+  dom.wxModal.classList.remove('show');
+  stopWxPoll();
+  // 未绑定就关窗：后台继续低频确认，避免用户扫码后误以为需重复扫码
+  if (!wxNotified) startWxBgPoll();
+}
 
 // 从微信切回页面时，立即刷新绑定状态（扫码后回浏览器即见「已开启」）
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) refreshWxStatus();
+  if (!document.hidden) {
+    refreshWxStatus();
+    if (!wxNotified && !wxPollTimer) startWxBgPoll();
+  }
 });
 
 dom.btnWxEntry.addEventListener('click', openWxModal);
@@ -2152,6 +2188,7 @@ dom.btnWxUnbind.addEventListener('click', async () => {
       body: JSON.stringify({ box: state.box })
     });
     wxNotified = false;
+    stopWxBgPoll();
     toast('已关闭微信通知');
     updateWxBanner();
     openWxModal(); // 切回未绑定视图
