@@ -196,7 +196,8 @@ export class ImgStore {
   async fetch(req) {
     const url = new URL(req.url);
     const id = url.searchParams.get('id') || '';
-    if (!/^[a-z0-9]{8,20}$/.test(id)) return new Response('bad id', { status: 400 });
+    // /list 不需要 id，先放行；其余路由必须带合法 id
+    if (url.pathname !== '/list' && !/^[a-z0-9]{8,20}$/.test(id)) return new Response('bad id', { status: 400 });
     if (url.pathname === '/put') {
       const buf = await req.arrayBuffer();
       if (!buf || buf.byteLength === 0 || buf.byteLength > 2 * 1024 * 1024) return new Response('bad size', { status: 400 });
@@ -210,6 +211,22 @@ export class ImgStore {
       if (!buf) return new Response('not found', { status: 404 });
       const type = (await this.state.storage.get('type:' + id)) || 'image/jpeg';
       return new Response(buf, { headers: { 'Content-Type': type } });
+    }
+    if (url.pathname === '/list') {
+      // DO 内部 list 无配额限制（不走 KV），返回全部图片 meta
+      const items = await this.state.storage.list({ prefix: 'img:' });
+      const metas = [];
+      for (const [k, v] of items) {
+        const id = k.slice(4);
+        const type = await this.state.storage.get('type:' + id);
+        metas.push({ id, size: v.byteLength || v.size || 0, type: type || 'image/jpeg' });
+      }
+      return new Response(JSON.stringify(metas), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.pathname === '/del') {
+      await this.state.storage.delete('img:' + id);
+      await this.state.storage.delete('type:' + id);
+      return new Response('ok');
     }
     return new Response('not found', { status: 404 });
   }
@@ -252,6 +269,63 @@ async function handleImgGet(path, env) {
     });
   } catch (e) {
     return new Response('error', { status: 500 });
+  }
+}
+
+// ============ Owner 图片管理 ============
+// 图片列表（含大小/类型/是否被信件引用）：DO 里存了 meta，引用关系由信件索引计算
+async function handleImgList(request, env) {
+  try {
+    // 1. 收集所有信件引用的图片ID → {imgId: [{msgId, from, to, createdAt}]}
+    const usedMap = new Map();
+    const ids = await getIndex(env, 'idx:all');
+    for (const mid of ids) {
+      const raw = await env.MESSAGES.get('msg:' + mid);
+      if (!raw) continue;
+      try {
+        const msg = JSON.parse(raw);
+        if (Array.isArray(msg.images)) {
+          for (const imgId of msg.images) {
+            if (!usedMap.has(imgId)) usedMap.set(imgId, []);
+            usedMap.get(imgId).push({ msgId: mid, from: msg.from, to: msg.to, createdAt: toBJTime(msg.createdAt) });
+          }
+        }
+      } catch (e) {}
+    }
+    // 2. 从 DO 拉全部图片 meta（含孤儿图）
+    const stub = env.IMG_STORE.get(env.IMG_STORE.idFromName('global'));
+    const r = await stub.fetch('https://img/list');
+    if (!r.ok) return json({ error: '读取图片失败' }, 500);
+    const metas = await r.json();
+    const list = metas.map(m => ({
+      id: m.id,
+      size: m.size,
+      type: m.type,
+      used: usedMap.get(m.id) || [], // 引用此图的信件
+      orphan: !usedMap.has(m.id),    // 孤儿图（信件已删）
+    }));
+    list.sort((a, b) => b.size - a.size);
+    const totalSize = list.reduce((s, i) => s + i.size, 0);
+    return json({ images: list, total: list.length, totalSize, quota: 5 * 1024 * 1024 * 1024 });
+  } catch (e) {
+    return json({ error: '加载失败' }, 500);
+  }
+}
+
+// 删除图片（仅删 DO 里的图片数据，不动任何信件 → 用户本地/信件显示不受影响，图片变裂图）
+async function handleImgDelete(request, env) {
+  try {
+    const { ids } = await request.json();
+    if (!Array.isArray(ids) || !ids.length) return json({ error: '参数缺失' }, 400);
+    const clean = ids.filter(i => typeof i === 'string' && /^[a-z0-9]{8,20}$/.test(i)).slice(0, 100);
+    if (!clean.length) return json({ error: '无有效ID' }, 400);
+    const stub = env.IMG_STORE.get(env.IMG_STORE.idFromName('global'));
+    for (const id of clean) {
+      await stub.fetch(`https://img/del?id=${encodeURIComponent(id)}`);
+    }
+    return json({ ok: true, deleted: clean.length });
+  } catch (e) {
+    return json({ error: '删除失败' }, 500);
   }
 }
 // 联系人显示：有备注 → 备注（信箱号）；无备注 → 信箱号
@@ -566,6 +640,8 @@ export default {
     if (path === '/api/owner-login' && method === 'POST') return handleOwnerLogin(request, env);
     if (path === '/api/owner/messages' && method === 'GET') return handleOwnerMessages(request, env, url);
     if (path === '/api/owner/batch-delete' && method === 'POST') return handleOwnerBatchDelete(request, env);
+    if (path === '/api/owner/img/list' && method === 'GET') return handleImgList(request, env);
+    if (path === '/api/owner/img/delete' && method === 'POST') return handleImgDelete(request, env);
 
     return json({ error: 'Not Found' }, 404);
   },

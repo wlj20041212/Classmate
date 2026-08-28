@@ -407,6 +407,19 @@ main{max-width:560px;margin:0 auto;padding:16px 20px 10px}
 .owner-item .letter-img{max-width:100px;max-height:100px}
 .img-viewer{position:fixed;inset:0;background:rgba(20,16,12,.93);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
 .img-viewer img{max-width:94vw;max-height:90vh;border-radius:8px}
+/* owner 图片管理 */
+.img-mgr{margin:10px 0}
+.img-mgr-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--paper-deep);border:1px solid var(--paper-line);border-radius:6px}
+.img-mgr-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;padding:10px 0;max-height:52vh;overflow-y:auto}
+.img-mgr-item{border:1px solid var(--paper-line);border-radius:8px;overflow:hidden;background:var(--paper);position:relative}
+.img-mgr-item .ph{height:104px;background:var(--paper-deep);display:flex;align-items:center;justify-content:center;cursor:zoom-in}
+.img-mgr-item .ph img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.img-mgr-item .ph .broken{font-size:11px;color:var(--ink-faint);text-align:center;padding:0 8px}
+.img-mgr-item .info{padding:6px 8px;font-size:11px;color:var(--ink-soft);line-height:1.5}
+.img-mgr-item .info .tag{display:inline-block;padding:0 6px;border-radius:3px;font-size:10px;margin-left:4px}
+.img-mgr-item .tag.orphan{background:rgba(179,67,43,.12);color:var(--cinnabar)}
+.img-mgr-item .tag.used{background:rgba(96,125,84,.14);color:#5a7a4a}
+.img-mgr-item .chk{position:absolute;top:6px;left:6px;z-index:2}
 .countdown-row{
   display:flex;align-items:center;gap:8px;padding:0 14px 4px;font-size:12.5px;color:var(--ink-soft);
 }
@@ -1049,8 +1062,20 @@ body.owner-open .tabbar{display:none}
 <div class="owner-panel" id="ownerPanel">
   <div class="owner-head">
     <h2>飞鸽总站 · 掌柜后台</h2>
+    <button class="btn" id="btnOwnerImgMgr">图片管理</button>
     <button class="btn" id="btnOwnerRefresh">刷新</button>
     <button class="btn btn-logout" id="btnOwnerBack">返回</button>
+  </div>
+  <!-- 图片管理视图（owner 专属：删服务器图片，不碰用户本地缓存与信件） -->
+  <div class="img-mgr" id="imgMgr" hidden>
+    <div class="img-mgr-bar">
+      <span id="imgMgrStats" style="font-size:12px;color:var(--ink-soft)"></span>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-soft);cursor:pointer"><input type="checkbox" id="imgMgrOrphanOnly"> 只看无主图</label>
+      <button id="btnImgMgrRefresh" class="btn" style="padding:4px 12px;font-size:12px">刷新</button>
+      <button id="btnImgMgrDel" style="background:var(--cinnabar);color:var(--paper);border:none;padding:4px 14px;border-radius:4px;cursor:pointer;font-size:12px">删除选中</button>
+      <button id="btnImgMgrClose" class="btn" style="padding:4px 12px;font-size:12px">返回信件</button>
+    </div>
+    <div class="img-mgr-list" id="imgMgrList"></div>
   </div>
   <div class="owner-filter">
     <input type="text" id="ownerFilterBox" placeholder="信箱号筛选" maxlength="6">
@@ -1144,6 +1169,9 @@ const dom = {
   ownerFilterBox: $('ownerFilterBox'), ownerFilterStatus: $('ownerFilterStatus'),
   btnOwnerSearch: $('btnOwnerSearch'), ownerList: $('ownerList'), ownerTotal: $('ownerTotal'),
   ownerSelectAll: $('ownerSelectAll'), btnOwnerBatchDel: $('btnOwnerBatchDel'),
+  btnOwnerImgMgr: $('btnOwnerImgMgr'), imgMgr: $('imgMgr'), imgMgrStats: $('imgMgrStats'),
+  imgMgrOrphanOnly: $('imgMgrOrphanOnly'), btnImgMgrRefresh: $('btnImgMgrRefresh'),
+  btnImgMgrDel: $('btnImgMgrDel'), btnImgMgrClose: $('btnImgMgrClose'), imgMgrList: $('imgMgrList'),
 };
 
 /* ---------- 信箱号 ---------- */
@@ -3420,6 +3448,95 @@ dom.ownerList.addEventListener('click', async (e) => {
     toast('已删除');
     loadOwnerMessages();
   } catch (e2) {
+    toast('删除失败，稍后再试');
+  }
+});
+
+/* ---------- Owner 图片管理（只删服务器图片，不动信件/用户本地缓存） ---------- */
+function fmtBytes(n) {
+  if (!n) return '0B';
+  if (n < 1024) return n + 'B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + 'KB';
+  return (n / 1024 / 1024).toFixed(2) + 'MB';
+}
+let imgMgrData = [];
+
+async function loadImgMgr() {
+  dom.imgMgrList.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--ink-faint);padding:20px">加载中…</div>';
+  try {
+    const res = await fetch(`${API_BASE}/owner/img/list`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error();
+    imgMgrData = data.images || [];
+    const pct = data.totalSize && data.quota ? (data.totalSize / data.quota * 100).toFixed(1) : 0;
+    const orphans = imgMgrData.filter(i => i.orphan).length;
+    dom.imgMgrStats.textContent = `共 ${imgMgrData.length} 张 · 已用 ${fmtBytes(data.totalSize)} / 5GB（${pct}%） · 无主图 ${orphans} 张`;
+    renderImgMgr();
+  } catch (e) {
+    dom.imgMgrList.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--cinnabar);padding:20px">加载失败</div>';
+  }
+}
+
+function renderImgMgr() {
+  const orphanOnly = dom.imgMgrOrphanOnly.checked;
+  const list = orphanOnly ? imgMgrData.filter(i => i.orphan) : imgMgrData;
+  if (!list.length) {
+    dom.imgMgrList.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--ink-faint);padding:20px">${orphanOnly ? '没有无主图' : '暂无图片'}</div>`;
+    return;
+  }
+  dom.imgMgrList.innerHTML = list.map(img => {
+    const useInfo = img.orphan
+      ? '<span class="tag orphan">无主</span>'
+      : `<span class="tag used">在信</span> ${esc(img.used[0].from || '?')}→${esc(img.used[0].to || '?')}`;
+    return `<div class="img-mgr-item" data-id="${img.id}">
+      <input type="checkbox" class="chk" data-id="${img.id}" style="width:16px;height:16px">
+      <div class="ph"><img src="${API_BASE}/img/${img.id}" loading="lazy" alt="" onerror="this.parentNode.innerHTML='<div class=&quot;broken&quot;>图片已不可用</div>'"></div>
+      <div class="info">${fmtBytes(img.size)}${useInfo}</div>
+    </div>`;
+  }).join('');
+}
+
+dom.btnOwnerImgMgr.addEventListener('click', () => {
+  dom.imgMgr.hidden = false;
+  dom.ownerFilter.style.display = 'none';
+  dom.ownerList.style.display = 'none';
+  loadImgMgr();
+});
+dom.btnImgMgrClose.addEventListener('click', () => {
+  dom.imgMgr.hidden = true;
+  dom.ownerFilter.style.display = '';
+  dom.ownerList.style.display = '';
+});
+dom.btnImgMgrRefresh.addEventListener('click', loadImgMgr);
+dom.imgMgrOrphanOnly.addEventListener('change', renderImgMgr);
+dom.imgMgrList.addEventListener('click', (e) => {
+  const ph = e.target.closest('.ph');
+  if (ph && e.target.tagName === 'IMG') {
+    const v = document.createElement('div');
+    v.className = 'img-viewer';
+    v.innerHTML = `<img src="${e.target.src}" alt="">`;
+    v.addEventListener('click', () => v.remove());
+    document.body.appendChild(v);
+  }
+});
+dom.btnImgMgrDel.addEventListener('click', async () => {
+  const ids = [...dom.imgMgrList.querySelectorAll('.chk:checked')].map(c => c.dataset.id);
+  if (!ids.length) { toast('请先勾选图片'); return; }
+  const hasUsed = imgMgrData.some(i => ids.includes(i.id) && !i.orphan);
+  const hint = hasUsed
+    ? `选中的 ${ids.length} 张里有在信图片，删除后对应信件将显示不了图，但信件本身不受影响。确认删除？`
+    : `确认删除选中的 ${ids.length} 张图片？（仅清理服务器，不影响用户本地缓存）`;
+  if (!confirm(hint)) return;
+  try {
+    const res = await fetch(`${API_BASE}/owner/img/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!res.ok) throw new Error();
+    toast('已删除 ' + ids.length + ' 张');
+    loadImgMgr();
+  } catch (e) {
     toast('删除失败，稍后再试');
   }
 });
