@@ -39,3 +39,13 @@ id = "f2bd5339a757492b8992b1ced068ff53"
 [[kv_namespaces]]
 binding = "CODES"
 id = "0e325ac2a8674a57a3a30e415d061e97"
+
+# 微信绑定关系 DO（强一致存储，扫码绑定秒级可见，无 KV 传播延迟）
+[durable_objects]
+bindings = [
+  { name = "WX_BINDINGS", class_name = "WxBindings" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WxBindings"]

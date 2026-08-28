@@ -130,10 +130,60 @@ const WX_TOKEN_CACHE = 'wx_access_token_cache'; // access_token 缓存（2小时
 //   wxopenid:{box} → 用户 openid（扫码自动绑定，一个微信可绑多个信箱，迁移后旧号通知仍可达）
 //   wxremark:{box} → {对方信箱:备注}（用户自己的备注，仅用于发给他本人的通知）
 
+// ============ 微信绑定存储：Durable Object（强一致，扫码写入后全球秒级可见，无KV传播延迟） ============
+// 免费版 SQLite DO；KV 仍双写作备份；每个信箱首次读取时从 KV 一次性迁移历史绑定
+export class WxBindings {
+  constructor(state, env) { this.state = state; this.env = env; }
+  async fetch(req) {
+    const url = new URL(req.url);
+    const box = (url.searchParams.get('box') || '').toUpperCase();
+    if (!/^[A-HJ-NP-Z2-9]{6}$/.test(box)) return new Response('bad box', { status: 400 });
+    if (url.pathname === '/get') {
+      let v = await this.state.storage.get('b:' + box);
+      if (v === undefined) {
+        // 本信箱未迁移过 → 从 KV 迁移一次；m: 标记防止解绑后60秒内被 KV 旧缓存复活
+        if (!(await this.state.storage.get('m:' + box))) {
+          try {
+            const kv = await this.env.MESSAGES.get('wxopenid:' + box);
+            if (kv) { v = kv; await this.state.storage.put('b:' + box, v); }
+          } catch (e) {}
+          await this.state.storage.put('m:' + box, 1);
+        }
+      }
+      return new Response(v || '');
+    }
+    if (url.pathname === '/set') {
+      const openid = url.searchParams.get('openid') || '';
+      if (openid) await this.state.storage.put('b:' + box, openid);
+      else await this.state.storage.delete('b:' + box);
+      await this.state.storage.put('m:' + box, 1); // 已知状态，不再从 KV 迁移
+      return new Response('ok');
+    }
+    return new Response('not found', { status: 404 });
+  }
+}
+
 async function getWxOpenid(env, box) {
   if (!box) return '';
-  // cacheTtl:0 绕过边缘读缓存，降低扫码绑定后状态查询的延迟（KV跨节点传播仍最长约1分钟）
-  try { return (await env.MESSAGES.get(`wxopenid:${box}`, { cacheTtl: 0 })) || ''; } catch (e) { return ''; }
+  // 读 Durable Object（强一致，扫码后立即可见）；DO 异常时回退 KV
+  try {
+    const id = env.WX_BINDINGS.idFromName('global');
+    const r = await env.WX_BINDINGS.get(id).fetch(`https://wx/get?box=${encodeURIComponent(box)}`);
+    if (r.ok) return (await r.text()).trim();
+  } catch (e) {}
+  try { return (await env.MESSAGES.get(`wxopenid:${box}`)) || ''; } catch (e) { return ''; }
+}
+
+async function setWxOpenid(env, box, openid) {
+  // 双写：DO（读路径，强一致）+ KV（备份）
+  try {
+    const id = env.WX_BINDINGS.idFromName('global');
+    await env.WX_BINDINGS.get(id).fetch(`https://wx/set?box=${encodeURIComponent(box)}&openid=${encodeURIComponent(openid || '')}`);
+  } catch (e) {}
+  try {
+    if (openid) await env.MESSAGES.put(`wxopenid:${box}`, openid);
+    else await env.MESSAGES.delete(`wxopenid:${box}`);
+  } catch (e) {}
 }
 async function getWxRemarks(env, box) {
   if (!box) return {};
@@ -241,7 +291,7 @@ async function handleWxCallback(request, env, url) {
         let key = pick('EventKey') || '';
         if (key.startsWith('qrscene_')) key = key.slice('qrscene_'.length);
         if (/^[A-HJ-NP-Z2-9]{6}$/.test(key)) {
-          await env.MESSAGES.put(`wxopenid:${key}`, openid);
+          await setWxOpenid(env, key, openid);
           // 维护反向索引（取关时用，避免全KV list）
           try {
             const raw = await env.MESSAGES.get('wxuser:' + openid);
@@ -260,8 +310,8 @@ async function handleWxCallback(request, env, url) {
           const boxes = raw ? JSON.parse(raw) : [];
           for (const b of boxes) {
             // 仅当该信箱确实绑定的是这个 openid 时才清除（防止误删他人绑定）
-            if ((await env.MESSAGES.get('wxopenid:' + b)) === openid) {
-              await env.MESSAGES.delete('wxopenid:' + b);
+            if ((await getWxOpenid(env, b)) === openid) {
+              await setWxOpenid(env, b, '');
             }
           }
           await env.MESSAGES.delete('wxuser:' + openid);
@@ -933,7 +983,7 @@ async function handleWxUnbind(request, env) {
     const { box } = await request.json();
     const b = (box || '').toUpperCase();
     if (!b || !/^[A-HJ-NP-Z2-9]{6}$/.test(b)) return json({ error: '信箱号无效' }, 400);
-    await env.MESSAGES.delete(`wxopenid:${b}`);
+    await setWxOpenid(env, b, '');
     // 备注（通知用）也一并清理
     await env.MESSAGES.delete(`wxremark:${b}`);
     return json({ ok: true });
