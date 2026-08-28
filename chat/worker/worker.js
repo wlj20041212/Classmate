@@ -421,9 +421,12 @@ async function wxNotifyArrived(env, msg) {
 // cron 每分钟跑：到点的信 → 推送送达/殒命通知
 // 用 msg.wxNotified 标志判断是否已通知，不能用 status==='flying' 判断：
 // 前端30秒轮询会先把状态改成 delivered/dead，若只认 flying 会永远漏发送达通知
+// 写入配额保护：队列无变化时不回写（否则每分钟重写一次，1440次/天直接打爆KV免费版1000次/天写入限额）
 async function processWxPend(env) {
+  const rawPend = await env.MESSAGES.get(WX_PEND_KEY);
+  if (!rawPend) return;
   let pend = [];
-  try { pend = JSON.parse((await env.MESSAGES.get(WX_PEND_KEY)) || '[]'); } catch (e) {}
+  try { pend = JSON.parse(rawPend); } catch (e) {}
   if (!Array.isArray(pend) || !pend.length) return;
   const now = Date.now();
   const remain = [];
@@ -447,7 +450,8 @@ async function processWxPend(env) {
       remain.push(item); // 出错留下轮重试
     }
   }
-  await env.MESSAGES.put(WX_PEND_KEY, JSON.stringify(remain));
+  const remainStr = JSON.stringify(remain);
+  if (remainStr !== rawPend) await env.MESSAGES.put(WX_PEND_KEY, remainStr); // 有变化才写
 }
 
 // ============ 主入口 ============
