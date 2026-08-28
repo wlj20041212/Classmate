@@ -15,7 +15,11 @@
 #  10. 把 Worker URL 填到 chat/index.html 的 API_BASE
 #  11. 微信测试号页面（mp.weixin.qq.com/debug/cgi-bin/sandboxinfo）：
 #      - 「接口配置信息」URL 填 https://<worker域名>/wx/callback，Token 与 WX_TOKEN 一致
-#      - 「模板消息接口」新增模板，内容填：{{first.DATA}}\n{{content.DATA}}\n{{remark.DATA}}
+#      - 「模板消息接口」新增模板，标题「飞鸽传书」，内容（四行，变量前必须带说明文字+冒号，否则正文空白）：
+#          {{first.DATA}}
+#          信件动态：{{keyword1.DATA}}
+#          寄出信息：{{keyword2.DATA}}
+#          {{remark.DATA}}
 #        得到的模板ID填入 WX_TEMPLATE_ID
 
 name = "pigeon-chat"

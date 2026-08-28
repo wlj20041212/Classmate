@@ -171,10 +171,12 @@ async function getWxAccessToken(env) {
 }
 
 // 推送一条模板消息通知；返回 {ok, msg}
-// 模板内容（测试号新增模板时填写）：
-//   {{first.DATA}}\n{{content.DATA}}\n{{remark.DATA}}
 // wxPush: 三行模板消息（first/keyword1/keyword2/remark）
-// 模板定义需为四行：{{first.DATA}}\n{{keyword1.DATA}}\n{{keyword2.DATA}}\n{{remark.DATA}}
+// 模板内容（测试号新增模板时填写）——注意：变量前必须带说明文字+冒号，否则微信不替换动态值、正文空白：
+//   {{first.DATA}}
+//   信件动态：{{keyword1.DATA}}
+//   寄出信息：{{keyword2.DATA}}
+//   {{remark.DATA}}
 async function wxPush(env, openid, firstLine, keyword1, keyword2) {
   if (!openid || !env.WX_TEMPLATE_ID) return { ok: false, msg: '未配置' };
   let token = await getWxAccessToken(env);
@@ -310,29 +312,27 @@ async function wxRegisterSend(env, msg) {
   } catch (e) {}
 
   const flyStr = fmtFly(msg.flyHours);
-  const sentTime = toBJTime(msg.createdAt);
   // 收件人：新信在途提醒
   const toUid = await getWxOpenid(env, msg.to);
   if (toUid) {
     const rmk = await getWxRemarks(env, msg.to);
     await wxPush(env, toUid, '飞鸽传书 · 新信在途',
       '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信正在飞来',
-      '预计 ' + flyStr + ' 后抵达 · 寄出时间：' + sentTime);
+      '预计' + flyStr + '后抵达');
   }
   // 发件人：寄出回执（正在运送中）
   const fromUid = await getWxOpenid(env, msg.from);
   if (fromUid) {
     const rmk = await getWxRemarks(env, msg.from);
-    await wxPush(env, fromUid, '飞鸽传书 · 送达回执',
-      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已发送，正在运送中',
-      '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+    await wxPush(env, fromUid, '飞鸽传书 · 寄出回执',
+      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已寄出',
+      '预计' + flyStr + '后送达');
   }
 }
 
 // 送达/殒命通知：什么时候到/什么时候死，就什么时候提示
 async function wxNotifyArrived(env, msg) {
   const flyStr = fmtFly(msg.flyHours);
-  const sentTime = toBJTime(msg.createdAt);
   const toUid = await getWxOpenid(env, msg.to);
   const fromUid = await getWxOpenid(env, msg.from);
   if (msg.willDie) {
@@ -340,14 +340,14 @@ async function wxNotifyArrived(env, msg) {
     if (toUid) {
       const rmk = await getWxRemarks(env, msg.to);
       await wxPush(env, toUid, '飞鸽传书 · 信使殒命',
-        '一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，信使途中殒命，未能送达',
-        '死因：' + (msg.deathReason || '天有不测风云'));
+        '来自「' + wxContactLabel(rmk, msg.from) + '」的信使殒命',
+        msg.deathReason || '天有不测风云');
     }
     if (fromUid) {
       const rmk = await getWxRemarks(env, msg.from);
       await wxPush(env, fromUid, '飞鸽传书 · 信使殒命',
-        '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信使途中殒命，信件未能送达',
-        '死因：' + (msg.deathReason || '天有不测风云') + ' · 寄出时间：' + sentTime);
+        '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信使殒命',
+        msg.deathReason || '天有不测风云');
     }
     return;
   }
@@ -355,19 +355,21 @@ async function wxNotifyArrived(env, msg) {
   if (toUid) {
     const rmk = await getWxRemarks(env, msg.to);
     await wxPush(env, toUid, '飞鸽传书 · 新信件',
-      '你的信箱收到一封来自「' + wxContactLabel(rmk, msg.from) + '」的信，纸短情长，速去查看',
-      '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+      '来自「' + wxContactLabel(rmk, msg.from) + '」的信已到信箱',
+      '速去 wanglejiang.top/chat 查看');
   }
   // 送达：发件人回执
   if (fromUid) {
     const rmk = await getWxRemarks(env, msg.from);
     await wxPush(env, fromUid, '飞鸽传书 · 送达回执',
-      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已安全送达对方信箱',
-      '寄出时间：' + sentTime + ' · 飞行时长：' + flyStr);
+      '你寄往「' + wxContactLabel(rmk, msg.to) + '」的信已送达',
+      '历时' + flyStr);
   }
 }
 
-// cron 每分钟跑：到点的信 → 更新状态 + 推送送达/殒命通知
+// cron 每分钟跑：到点的信 → 推送送达/殒命通知
+// 用 msg.wxNotified 标志判断是否已通知，不能用 status==='flying' 判断：
+// 前端30秒轮询会先把状态改成 delivered/dead，若只认 flying 会永远漏发送达通知
 async function processWxPend(env) {
   let pend = [];
   try { pend = JSON.parse((await env.MESSAGES.get(WX_PEND_KEY)) || '[]'); } catch (e) {}
@@ -381,9 +383,13 @@ async function processWxPend(env) {
       const raw = await env.MESSAGES.get('msg:' + item.id);
       if (!raw) continue; // 信件已不存在，丢弃
       const msg = JSON.parse(raw);
-      if (msg.status !== 'flying') continue; // 已召回/已被查询处理，丢弃
-      // 与 computeStatus 相同的状态判定
-      msg.status = msg.willDie ? 'dead' : 'delivered';
+      if (msg.status === 'recalled') continue; // 已召回，不通知
+      if (msg.wxNotified) continue; // 已通知过，丢弃
+      // 前端查询可能已把状态改为 delivered/dead，这里只在仍 flying 时补状态
+      if (msg.status === 'flying') {
+        msg.status = msg.willDie ? 'dead' : 'delivered';
+      }
+      msg.wxNotified = true;
       await env.MESSAGES.put('msg:' + item.id, JSON.stringify(msg));
       await wxNotifyArrived(env, msg);
     } catch (e) {
@@ -974,8 +980,8 @@ async function handleWxTestSend(request, env, url) {
   if (!openid) return json({ error: '该信箱未绑定微信' }, 400);
   const r = await wxPush(env, openid,
     '飞鸽传书 · 测试通知',
-    '这是一条测试消息，用于验证模板各字段是否正常显示',
-    toBJTime(Date.now()) + ' · 若能看到此行说明 keyword2 正常');
+    '测试消息，能看见此行说明模板正常',
+    toBJTime(Date.now()));
   return json(r.ok ? { ok: true } : { ok: false, error: r.msg }, r.ok ? 200 : 500);
 }
 
