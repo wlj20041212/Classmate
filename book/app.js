@@ -114,13 +114,17 @@
     const tb = p1.querySelector('.textbody');
     const bodyH = tb.clientHeight;
     const w = tb.clientWidth;
+    // 关键：测量器必须继承 .paper 的实际字号与行高，否则分页严重失准
+    const cs = getComputedStyle(p1.querySelector('.paper'));
+    const m = measurer();
+    m.style.width = w + 'px';
+    m.style.fontSize = cs.fontSize;
+    m.style.lineHeight = cs.lineHeight;
     p1.parentNode.removeChild(p1);
     // 标题页探针（标题 + 画像 + 空正文）
     const p2 = probe(titlePageHtml(ch, 0, 0, true));
     const tH = p2.querySelector('.textbody').clientHeight;
     p2.parentNode.removeChild(p2);
-    // 同步测量器宽度
-    measurer().style.width = w + 'px';
     return [Math.max(tH, 60), Math.max(bodyH, 60)];
   }
 
