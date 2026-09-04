@@ -898,6 +898,14 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
   .ai-tip-arrow { right: 14px; }
 }
 
+/* ---------- 王氏春秋提示气泡（书按钮上方） ---------- */
+.ai-tip-bubble.book-tip {
+  bottom: 396px;
+}
+.ai-tip-bubble.book-tip .ai-tip-text strong {
+  color: #1d3557;
+}
+
 /* ---------- AI Sidebar (Desktop only) ---------- */
 .ai-sidebar {
   position: fixed;

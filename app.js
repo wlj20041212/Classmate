@@ -4374,6 +4374,32 @@ if (typeof module !== 'undefined' && module.exports) {
         });
     }
 
+    // ===== 王氏春秋提示气泡（首次进入提示，与AI气泡同机制） =====
+    const bookBubble = document.getElementById('bookTipBubble');
+    const bookClose = document.getElementById('bookTipClose');
+    const bookBtn = document.getElementById('bookFloatBtn');
+    if (bookBubble) {
+        const BOOK_TIP_KEY = 'lejiang_book_tip_dismissed_v1';
+        const bookDismissed = localStorage.getItem(BOOK_TIP_KEY) === '1';
+        if (!bookDismissed) {
+            setTimeout(() => bookBubble.classList.add('show'), 1600);
+        }
+        const hideBookTip = (permanent) => {
+            bookBubble.classList.remove('show');
+            bookBubble.classList.add('hide');
+            if (permanent) localStorage.setItem(BOOK_TIP_KEY, '1');
+        };
+        if (bookClose) {
+            bookClose.addEventListener('click', (e) => {
+                e.stopPropagation();
+                hideBookTip(true);
+            });
+        }
+        if (bookBtn) {
+            bookBtn.addEventListener('click', () => hideBookTip(true));
+        }
+    }
+
     // 判断是否为移动端
     function isMobile() {
         return window.innerWidth <= 768;

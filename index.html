@@ -11,7 +11,7 @@
             font-family: 'Microsoft YaHei', 'SimHei', 'STHeiti', 'PingFang SC', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', sans-serif;
         }
     </style>
-    <link rel="stylesheet" href="styles.css?v=8.3">
+    <link rel="stylesheet" href="styles.css?v=8.4">
     <!-- Google Analytics (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-2HG19J2MJX"></script>
     <script>
@@ -191,6 +191,11 @@
         🕊️
     </a>
 
+    <!-- 王氏春秋浮动按钮 -->
+    <a href="book" id="bookFloatBtn" class="ai-float-btn" title="王氏春秋" aria-label="打开王氏春秋" style="bottom:330px;background:linear-gradient(135deg,#1d3557,#141e30);text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#f0e6d2;letter-spacing:1px;">
+        书
+    </a>
+
     <!-- AI 新功能提示气泡 -->
     <div id="aiTipBubble" class="ai-tip-bubble" role="dialog" aria-label="新功能提示">
         <div class="ai-tip-arrow"></div>
@@ -198,6 +203,16 @@
             <span class="ai-tip-emoji">✨</span>
             <span class="ai-tip-text">本站已上线 <strong>AI 聊天</strong> 功能，点击此处试试吧！</span>
             <button class="ai-tip-close" id="aiTipClose" aria-label="关闭提示">×</button>
+        </div>
+    </div>
+
+    <!-- 王氏春秋新功能提示气泡 -->
+    <div id="bookTipBubble" class="ai-tip-bubble book-tip" role="dialog" aria-label="新功能提示">
+        <div class="ai-tip-arrow"></div>
+        <div class="ai-tip-content">
+            <span class="ai-tip-emoji">📜</span>
+            <span class="ai-tip-text">新增 <strong>王氏春秋</strong> 家传一书，点击此处翻阅！</span>
+            <button class="ai-tip-close" id="bookTipClose" aria-label="关闭提示">×</button>
         </div>
     </div>
 
@@ -215,7 +230,7 @@
     <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
     
     <!-- 应用主脚本 -->
-    <script src="app.js?v=16.9"></script>
+    <script src="app.js?v=17.0"></script>
     
     <!-- Task 5.2 验证脚本 (可选，用于测试) -->
     <!-- <script src="verify-task-5.2.js"></script> -->

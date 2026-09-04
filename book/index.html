@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>王氏春秋 · 家传</title>
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+<div class="frame">
+
+  <div class="book-stage">
+    <div class="book" id="book">
+      <div class="spread" id="spread">
+        <div class="half left" id="halfLeft"></div>
+        <div class="gutter-shadow"></div>
+        <div class="half right" id="halfRight"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="arrow-btn arrow-prev" id="btnPrev" aria-label="上一页">‹</button>
+  <button class="arrow-btn arrow-next" id="btnNext" aria-label="下一页">›</button>
+
+  <button class="back-btn" id="btnBack" title="返回">‹ 返 回</button>
+
+  <div class="top-tools">
+    <button class="tool-chip" id="btnCloseBook" title="合上书本">合 卷</button>
+  </div>
+  <div class="hint-tip" id="hintTip"></div>
+</div>
+
+<!-- 合书封面 -->
+<div class="cover-shell" id="coverShell">
+  <div class="shade"></div>
+  <div class="cover-book" id="coverBook">
+    <div class="cover-seal">王氏<br>纪略</div>
+    <div class="cover-title-wrap">
+      <div class="cover-main">王氏春秋</div>
+    </div>
+    <div class="cover-hint">轻触翻开 · 亲启此卷</div>
+  </div>
+</div>
+
+<script src="data.js?v=2"></script>
+<script src="app.js?v=2"></script>
+</body>
+</html>
