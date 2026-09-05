@@ -53,6 +53,12 @@
   const finePointer = window.matchMedia('(pointer: fine)').matches;
 
   /* ---------- 小工具 ---------- */
+  const IMG_BASE = 'https://letter.wanglejiang.top/chat/api/img/';
+  function portraitUrl(p) {
+    if (!p) return '';
+    // DO id（8-20位小写字母数字）→ ImgStore 地址；否则按本地文件名
+    return /^[a-z0-9]{8,20}$/.test(p) ? IMG_BASE + p : p;
+  }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function cn(n) { return cnNums[n] || String(n); }
   function toParas(textOrArr) {
@@ -365,7 +371,7 @@
           '<div class="chapter-meta">' + esc(ch.name) + ' · ' + esc(ch.place) + '人' +
             (ch.no ? '　·　篇目 ' + esc(ch.no) : '') + '</div>' +
         '</div>' +
-        (ch.portrait ? '<div class="tf-portrait"><img src="' + esc(ch.portrait) + '" alt=""></div>' : '') +
+        (ch.portrait ? '<div class="tf-portrait"><img src="' + esc(portraitUrl(ch.portrait)) + '" alt=""></div>' : '') +
       '</div>' +
       '<div class="sep-orn"></div>' +
       '<div class="textbody">' + (probeMode ? '' : pageBodyHtml(ch, 0)) + '</div>' +
@@ -396,7 +402,7 @@
       '<div class="front-wrap">' +
         '<div class="intro-seal">陇西<br>王氏</div>' +
         '<div class="front-title">王氏春秋</div>' +
-        '<div class="front-sub">仿太史公列传体例 · 录己身与平生交游事略</div>' +
+        '<div class="front-sub">列传体例 · 录己身与平生交游事略</div>' +
         '<div class="textbody">' + paras(FRONT) + '</div>' +
         '<div class="front-note">' + FRONT_NOTE + '</div>' +
         '<div class="front-note self-note">' + esc(FRONT_SELFNOTE) + '</div>' +
@@ -557,7 +563,9 @@
     return sheet;
   }
 
-  /* 整跨页翻页：一次前进/后退两页，如真实书本翻过一张纸 */
+  /* 整跨页翻页：一次前进/后退两页，如真实书本翻过一张纸
+     关键：翻页过程中底层保持旧跨页，动画结束后再绘制新跨页，
+     避免新页内容提前一秒露出（原 paintView 在动画前执行导致） */
   function next() {
     if (busy || !canNext()) return;
     busy = true;
@@ -566,7 +574,6 @@
     const sheet = makeSheet('next', curRight, newLeft); // 正面=旧右页，背面=新左页
     curLeft = newLeft; curRight = newRight;
     spreadEl.appendChild(sheet);
-    paintView();
     let armed = false;
     const run = function () {
       if (armed) return;
@@ -585,7 +592,6 @@
     const sheet = makeSheet('prev', curLeft, newRight); // 正面=旧左页，背面=新右页
     curLeft = newLeft; curRight = newRight;
     spreadEl.appendChild(sheet);
-    paintView();
     let armed = false;
     const run = function () {
       if (armed) return;
@@ -598,6 +604,7 @@
   }
   function finishFlip(sheet) {
     if (sheet && sheet.parentNode) sheet.parentNode.removeChild(sheet);
+    paintView(); // 翻页完成后再绘制新跨页，避免新内容提前露出
     busy = false;
     updateNav();
     updateHint();
@@ -677,13 +684,9 @@
       location.href = '../index.html';
       return;
     }
-    // 直接访问分站：尝试关闭页面
+    // 直接访问分站：关闭页面
     sessionStorage.removeItem('book_from_main');
-    try { window.close(); } catch (e) {}
-    // 浏览器不允许关闭非脚本打开的标签页时，跳转到空白页
-    setTimeout(function () {
-      if (!window.closed) location.href = 'about:blank';
-    }, 120);
+    window.close();
   });
 
   /* ---------- 输入 ---------- */

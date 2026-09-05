@@ -1,0 +1,6 @@
+# 列传人物照片原图不入库，改存 ImgStore Durable Object
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
