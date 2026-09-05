@@ -666,17 +666,24 @@
 
   /* ---------- 返回：从主站进入 → 回主站；直接输网址 → 退出 ---------- */
   btnBack.addEventListener('click', function () {
+    // 主站点击"书"按钮时写入的标记，可靠区分来源（referrer 在重定向后可能丢失）
+    const fromMain = sessionStorage.getItem('book_from_main') === '1';
+    // 兜底：referrer 来自同站且非 book 路径
     const ref = document.referrer || '';
     const host = location.hostname;
-    const sameSite = ref && (ref.indexOf(host) >= 0);
-    const fromBook = /\/book(\/|$|\?)/.test(ref);
-    if (sameSite && !fromBook) {
+    const fromMainRef = ref && ref.indexOf(host) >= 0 && !/\/book(\/|$|\?)/.test(ref);
+    if (fromMain || fromMainRef) {
+      sessionStorage.removeItem('book_from_main');
       location.href = '../index.html';
-    } else if (history.length > 1) {
-      history.back();
-    } else {
-      location.href = '../index.html';
+      return;
     }
+    // 直接访问分站：尝试关闭页面
+    sessionStorage.removeItem('book_from_main');
+    try { window.close(); } catch (e) {}
+    // 浏览器不允许关闭非脚本打开的标签页时，跳转到空白页
+    setTimeout(function () {
+      if (!window.closed) location.href = 'about:blank';
+    }, 120);
   });
 
   /* ---------- 输入 ---------- */
