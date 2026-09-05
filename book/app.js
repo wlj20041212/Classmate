@@ -163,7 +163,7 @@
     return pages;
   }
 
-  /* ---------- 重建页面流（页数 = 古文/白话最大值） ---------- */
+  /* ---------- 重建页面流（页数 = 古文/白话最大值；补齐整跨页） ---------- */
   function rebuildPages(keepPos) {
     let mark = null;
     if (keepPos) {
@@ -180,6 +180,7 @@
     });
     colophonIdx = pl.length;
     pl.push({ kind: 'colophon' });
+    if (pl.length % 2 === 1) pl.push({ kind: 'blank' }); // 补一张空白页，保证整跨页成对
     pageList = pl;
     PAGE_LEN = pl.length;
     LAST = PAGE_LEN - 1;
@@ -189,11 +190,14 @@
         const q = pl[k];
         if (q.kind === mark.kind && q.ch === mark.ch && q.pi === mark.pi) { target = k; break; }
       }
-      if (target > 0) { curLeft = target - 1; curRight = Math.min(target, LAST); }
+      if (target > 0) {
+        const tl = target - (target % 2); // 对齐到跨页左页
+        curLeft = tl; curRight = Math.min(tl + 1, LAST);
+      }
     }
-    if (curLeft > LAST) { curLeft = Math.max(LAST - 1, 0); }
-    if (curRight > LAST) curRight = LAST;
-    if (curRight === curLeft) curRight = Math.min(curLeft + 1, LAST);
+    // 规范到合法跨页（左页必为偶数索引）
+    curLeft = Math.min(curLeft - (curLeft % 2), Math.max(LAST - 1, 0));
+    curRight = Math.min(curLeft + 1, LAST);
   }
 
   /* ============================================================
@@ -370,6 +374,7 @@
   function renderHalf(idx, isLeft) {
     const p = pageList[idx];
     if (!p) return '';
+    if (p.kind === 'blank') return '<div class="paper"><div class="rule"></div></div>';
     if (p.kind === 'front') return renderFront(idx);
     if (p.kind === 'toc') return renderToc(idx);
     if (p.kind === 'colophon') return renderColophon(idx);
@@ -521,10 +526,10 @@
     if (busy) return;
     if (P < 0) P = 0;
     if (P > LAST) P = LAST;
-    const tl = P > 0 ? P - 1 : 0;
-    if (tl === curLeft && tl + 1 === curRight) { flash(); return; }
-    if (tl === curRight) { next(); return; }
-    if (tl + 1 === curLeft) { prev(); return; }
+    const tl = P - (P % 2); // 对齐到跨页左页
+    if (tl === curLeft) { flash(); return; }
+    if (tl === curLeft + 2) { next(); return; }
+    if (tl + 2 === curLeft) { prev(); return; }
     quickFlipTo(tl);
   }
   function flash() {
@@ -541,21 +546,23 @@
   function canNext() { return curRight < LAST; }
   function canPrev() { return curLeft > 0; }
 
-  function makeSheet(dir, pageIdx) {
+  function makeSheet(dir, frontIdx, backIdx) {
     const sheet = document.createElement('div');
     sheet.className = 'sheet3d ' + (dir === 'next' ? 'nexting' : 'prevving');
-    sheet.innerHTML = '<div class="face front">' + renderHalf(pageIdx) + '</div>' +
-      '<div class="face back">' + renderHalf(pageIdx) + '</div>' +
+    sheet.innerHTML = '<div class="face front">' + renderHalf(frontIdx) + '</div>' +
+      '<div class="face back">' + renderHalf(backIdx) + '</div>' +
       '<div class="shadow-on"></div>';
     return sheet;
   }
 
+  /* 整跨页翻页：一次前进/后退两页，如真实书本翻过一张纸 */
   function next() {
     if (busy || !canNext()) return;
     busy = true;
-    const flyPage = curRight;
-    curLeft = flyPage; curRight = flyPage + 1;
-    const sheet = makeSheet('next', flyPage);
+    const newLeft = curRight + 1;
+    const newRight = Math.min(newLeft + 1, LAST);
+    const sheet = makeSheet('next', curRight, newLeft); // 正面=旧右页，背面=新左页
+    curLeft = newLeft; curRight = newRight;
     spreadEl.appendChild(sheet);
     paintView();
     let armed = false;
@@ -571,9 +578,10 @@
   function prev() {
     if (busy || !canPrev()) return;
     busy = true;
-    const flyPage = curLeft;
-    curLeft = flyPage - 1; curRight = flyPage;
-    const sheet = makeSheet('prev', flyPage);
+    const newRight = curLeft - 1;
+    const newLeft = newRight - 1;
+    const sheet = makeSheet('prev', curLeft, newRight); // 正面=旧左页，背面=新右页
+    curLeft = newLeft; curRight = newRight;
     spreadEl.appendChild(sheet);
     paintView();
     let armed = false;
