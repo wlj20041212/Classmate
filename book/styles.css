@@ -124,9 +124,13 @@ body{
 .pagenum::before,.pagenum::after{content:"—";color:var(--ink-3);letter-spacing:0}
 .pagenum::before{margin-right:.5em}
 .pagenum::after{margin-left:.5em}
-.textbody{flex:1;overflow:hidden}
+.textbody{flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .textbody p{text-indent:2em;text-align:justify;margin-bottom:.72em}
 .textbody p:last-child{margin-bottom:0}
+/* 细滚动条，桌面端可见、移动端系统默认隐藏 */
+.textbody::-webkit-scrollbar{width:3px}
+.textbody::-webkit-scrollbar-thumb{background:rgba(90,66,32,.28);border-radius:3px}
+.textbody::-webkit-scrollbar-track{background:transparent}
 
 /* 王生曰 */
 .shisheng{
