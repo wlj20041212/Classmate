@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, minimum-scale=1.0, maximum-scale=5.0">
-    <meta name="description" content="时间轴社交关系网络可视化系统 - 展示王乐江在不同学习时期的社交关系">
+    <meta name="description" content="时间轴社交关系网络可视化系统 - 展示不同学习时期的社交关系">
     <title>时间轴社交关系网络</title>
     <style>
         /* 中文字体支持 */
@@ -11,7 +11,7 @@
             font-family: 'Microsoft YaHei', 'SimHei', 'STHeiti', 'PingFang SC', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', sans-serif;
         }
     </style>
-    <link rel="stylesheet" href="styles.css?v=8.4">
+    <link rel="stylesheet" href="styles.css?v=8.5">
     <!-- Google Analytics (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-2HG19J2MJX"></script>
     <script>
@@ -42,6 +42,22 @@
 
         <!-- 关系图显示区域 -->
         <section class="graph-section">
+            <!-- 名字验证门控面板（默认显示，验证通过后隐藏） -->
+            <div id="nameGatePanel" class="name-gate-panel">
+                <h3 class="name-gate-title">请输入你的姓名验证身份</h3>
+                <p class="name-gate-hint">每天可查询 3 个不同名字（错误匹配也计入）</p>
+                <div class="name-gate-row">
+                    <input type="text" id="nameGateInput" placeholder="输入你的名字" maxlength="20" autocomplete="off" />
+                    <button id="nameGateBtn" type="button">验证</button>
+                </div>
+                <p id="nameGateCount" class="name-gate-count">今日剩余 3 次</p>
+                <div id="nameGatePwdBox" class="name-gate-pwd" style="display:none">
+                    <p>该名字需要密码确认</p>
+                    <input type="password" id="nameGatePwd" placeholder="密码" maxlength="20" autocomplete="off" />
+                    <button id="nameGatePwdBtn" type="button">确认</button>
+                </div>
+                <p id="nameGateMsg" class="name-gate-msg"></p>
+            </div>
             <div class="graph-header">
                 <h2 id="graphTitle">关系网络</h2>
                 <div class="graph-controls">
@@ -182,7 +198,7 @@
     </a>
 
     <!-- 诗稿浮动按钮 -->
-    <a href="poem" id="poemFloatBtn" class="ai-float-btn" title="王乐江诗稿" aria-label="打开诗稿" style="bottom:170px;background:linear-gradient(135deg,#c0392b,#8b0000);text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#fff;letter-spacing:2px;">
+    <a href="poem" id="poemFloatBtn" class="ai-float-btn" title="诗稿" aria-label="打开诗稿" style="bottom:170px;background:linear-gradient(135deg,#c0392b,#8b0000);text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#fff;letter-spacing:2px;">
         诗
     </a>
 
@@ -230,7 +246,7 @@
     <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
     
     <!-- 应用主脚本 -->
-    <script src="app.js?v=17.0"></script>
+    <script src="app.js?v=18.0"></script>
     
     <!-- Task 5.2 验证脚本 (可选，用于测试) -->
     <!-- <script src="verify-task-5.2.js"></script> -->

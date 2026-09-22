@@ -1228,6 +1228,51 @@ class GraphRenderer {
     }
 
     /**
+     * 重定中心（不重建网络、不扩展子图）
+     * 用于非 Owner 模式下子图锁定：用户点击节点只切换中心，子图节点和边不变
+     * @param {string} newCenterId - 新中心节点 ID
+     */
+    recenter(newCenterId) {
+        if (!this.network) return;
+        if (newCenterId === this.currentPerson) return;
+        
+        const nodes = this.network.body.data.nodes;
+        
+        // 旧中心改为普通样式（蓝色 dot + 默认字号）
+        if (this.currentPerson) {
+            nodes.update({
+                id: this.currentPerson,
+                color: {
+                    background: '#87CEEB',
+                    border: '#4682B4',
+                    highlight: { background: '#87CEEB', border: '#4169E1' }
+                },
+                size: 25,
+                font: { size: 14, bold: false }
+            });
+        }
+        
+        // 新中心改为金色 + 放大 + 字体加粗
+        nodes.update({
+            id: newCenterId,
+            color: {
+                background: '#FFD700',
+                border: '#FFA500',
+                highlight: { background: '#FFD700', border: '#FF8C00' }
+            },
+            size: 40,
+            font: { size: 16, bold: true }
+        });
+        
+        this.currentPerson = newCenterId;
+        this.network.focus(newCenterId, {
+            scale: 1.0,
+            animation: { duration: 500, easingFunction: 'easeInOutQuad' }
+        });
+        console.log(`[GraphRenderer] 重定中心: ${newCenterId}（子图未变）`);
+    }
+
+    /**
      * 高亮节点
      * @param {string} nodeId - 节点 ID
      */
@@ -1448,7 +1493,7 @@ class TimelineController {
  * 功能：
  * - 渲染时间轴选择器按钮
  * - 高亮当前选中时期
- * - 标识王乐江未参与的时期（初中二班、23年高中复读班20班）
+ * - 标识未参与的时期
  * - 实现按钮点击触发时期切换
  * _Requirements: 1.2, 1.4, 1.5_
  */
@@ -1465,11 +1510,16 @@ class TimelineSelector {
 
     /**
      * 渲染时间轴选择器 (任务 5.2)
+     * @param {Array<string>|null} allowedPeriodIds - 允许显示的时期 id 列表
+     *        null = 显示全部；空数组 = 不显示任何按钮（未验证态）；非空 = 只显示这些时期
      */
-    render() {
+    render(allowedPeriodIds = null) {
         console.log('[TimelineSelector] 渲染时间轴选择器');
         
         const periods = this.timelineController.getAllPeriods();
+        const filtered = allowedPeriodIds
+            ? periods.filter(p => allowedPeriodIds.includes(p.id))
+            : periods;
         
         // 清空容器
         this.container.innerHTML = '';
@@ -1478,14 +1528,14 @@ class TimelineSelector {
         const timeline = document.createElement('div');
         timeline.className = 'timeline';
         
-        periods.forEach((period, index) => {
+        filtered.forEach((period, index) => {
             const item = this.createTimelineItem(period, index);
             timeline.appendChild(item);
         });
         
         this.container.appendChild(timeline);
         
-        console.log('[TimelineSelector] 渲染完成，共', periods.length, '个时期');
+        console.log('[TimelineSelector] 渲染完成，共', filtered.length, '个时期');
     }
 
     /**
@@ -1501,7 +1551,7 @@ class TimelineSelector {
         // 标识未参与的时期 (任务 5.2 - 需求 1.4)
         if (!period.participated) {
             item.classList.add('not-participated');
-            item.title = `王乐江未参与此时期`;
+            item.title = '未参与此时期';
         }
         
         // 创建按钮
@@ -1696,6 +1746,9 @@ class App {
         this.authManager = new AuthManager();
         const isOwner = this.authManager.loadAuthState(); // 从 sessionStorage 恢复认证状态
         
+        // 名字验证门控（非 Owner 模式下的身份验证）
+        this.nameGate = new NameGate(this.data);
+        
         // 控制器层组件
         this.timelineController = new TimelineController(this.data);
         this.timelineController.init();
@@ -1762,7 +1815,13 @@ class App {
                     period_name: periodData ? periodData.name : periodId
                 });
             }
-            this.showPersonGraph(personId, periodId);
+            // Owner 模式：原行为（重新 buildGraphData 扩展）
+            // 非 Owner 模式：子图锁定，只重定中心不扩展
+            if (this.authManager.checkOwnerMode()) {
+                this.showPersonGraph(personId, periodId);
+            } else if (this.graphRenderer && this.graphRenderer.network) {
+                this.graphRenderer.recenter(personId);
+            }
         });
         
         // 认证状态变更事件 (任务 7.2)
@@ -1785,7 +1844,126 @@ class App {
         // 任务 11.3: 窗口 resize 节流（避免 Vis.js 频繁重布局）
         this.bindResizeThrottle();
         
+        // 名字验证门控事件绑定
+        this.bindNameGateEvents();
+        
         console.log('[App] 事件绑定完成');
+    }
+    
+    /**
+     * 绑定名字验证门控 UI 事件
+     */
+    bindNameGateEvents() {
+        const nameInput = document.getElementById('nameGateInput');
+        const nameBtn = document.getElementById('nameGateBtn');
+        const pwdBox = document.getElementById('nameGatePwdBox');
+        const pwdInput = document.getElementById('nameGatePwd');
+        const pwdBtn = document.getElementById('nameGatePwdBtn');
+        const msg = document.getElementById('nameGateMsg');
+        const countEl = document.getElementById('nameGateCount');
+        
+        if (!nameInput || !nameBtn) {
+            console.warn('[App] nameGate UI 元素未找到');
+            return;
+        }
+        
+        const updateCount = () => {
+            if (countEl) countEl.textContent = `今日剩余 ${this.nameGate.remainingCount()} 次`;
+        };
+        
+        const showMessage = (text, type) => {
+            if (!msg) return;
+            msg.textContent = text;
+            msg.className = 'name-gate-msg ' + (type || '');
+        };
+        
+        const handleName = async () => {
+            const name = nameInput.value.trim();
+            if (!name) {
+                showMessage('请输入名字', 'error');
+                return;
+            }
+            if (!this.nameGate.canAttempt(name)) {
+                showMessage('今日已用完 3 次不同名字配额，请明日再来', 'error');
+                this.nameGate.addUsedName(name); // 防止枚举
+                updateCount();
+                return;
+            }
+            // Owner 名字特殊处理：需要密码
+            if (this.nameGate.isWanglejiang(name)) {
+                if (pwdBox) {
+                    pwdBox.style.display = 'block';
+                    pwdInput.focus();
+                }
+                showMessage('该名字需要密码确认', 'info');
+                return;
+            }
+            // 普通名字匹配
+            const found = this.nameGate.findPerson(name);
+            this.nameGate.addUsedName(name); // 计入次数（含失败）
+            updateCount();
+            if (!found) {
+                showMessage(`未找到名为「${name}」的同学`, 'error');
+                nameInput.value = '';
+                return;
+            }
+            // 锁定并渲染
+            this.nameGate.lockTo(found);
+            this.hideNameGatePanel();
+            // 时间轴限制为该名字所在时期
+            const periodIds = this.nameGate.findPeriodIds(found);
+            this.timelineSelector.render(periodIds);
+            showMessage('', '');
+            // 自动切到第一个匹配时期
+            if (periodIds.length > 0) {
+                this.timelineSelector.selectPeriod(periodIds[0]);
+            }
+            nameInput.value = '';
+        };
+        
+        const handlePwd = async () => {
+            if (!pwdInput) return;
+            const pwd = pwdInput.value;
+            if (!pwd) {
+                showMessage('请输入密码', 'error');
+                return;
+            }
+            // Owner 名字+密码：计入次数
+            this.nameGate.addUsedName(this.data.owner);
+            updateCount();
+            const ok = await this.nameGate.verifyPassword(pwd);
+            if (!ok) {
+                showMessage('密码错误', 'error');
+                pwdInput.value = '';
+                return;
+            }
+            // 解锁 Owner 查看（所有时期可见，但仍非 Owner 模式）
+            this.nameGate.unlockAll();
+            this.hideNameGatePanel();
+            this.timelineSelector.render(null); // 显示所有时期
+            showMessage('', '');
+            pwdInput.value = '';
+            if (pwdBox) pwdBox.style.display = 'none';
+            // 自动切到第一个时期
+            const allPeriods = this.timelineController.getAllPeriods();
+            if (allPeriods.length > 0) {
+                this.timelineSelector.selectPeriod(allPeriods[0].id);
+            }
+        };
+        
+        nameBtn.addEventListener('click', handleName);
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleName();
+        });
+        if (pwdBtn) {
+            pwdBtn.addEventListener('click', handlePwd);
+        }
+        if (pwdInput) {
+            pwdInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') handlePwd();
+            });
+        }
+        updateCount();
     }
     
     /**
@@ -1945,22 +2123,44 @@ class App {
             });
         }
 
-        // 更新图表标题
+        // Owner 模式：原行为（默认显示 owner 关系网）
+        // 非 Owner + 未验证：显示验证面板，不渲染图
+        // 非 Owner + 已锁定：以锁定人物为中心渲染子图（不扩展）
+        if (this.authManager.checkOwnerMode()) {
+            const graphTitle = document.getElementById('graphTitle');
+            if (graphTitle) {
+                graphTitle.textContent = `${periodData.name} - ${this.data.owner}`;
+            }
+            const owner = this.data.owner;
+            if (periodData.roster.includes(owner)) {
+                this.showPersonGraph(owner, periodId);
+            } else {
+                this.showNotParticipatedMessage(periodData);
+            }
+            return;
+        }
+
+        // 非 Owner 模式
+        const locked = this.nameGate.lockedName;
+        if (!locked) {
+            // 未验证：显示验证面板、清空图、标题置空
+            const graphTitle = document.getElementById('graphTitle');
+            if (graphTitle) graphTitle.textContent = periodData.name;
+            this.showNameGatePanel();
+            const graphContainer = document.getElementById('graphContainer');
+            if (graphContainer) graphContainer.innerHTML = '';
+            return;
+        }
+
+        // 已锁定：以锁定人物为中心渲染子图
         const graphTitle = document.getElementById('graphTitle');
         if (graphTitle) {
-            graphTitle.textContent = `${periodData.name} - ${this.data.owner}`;
+            graphTitle.textContent = `${periodData.name} - ${locked}`;
         }
-        
-        // 自动更新关系图 (任务 5.3 - 需求 1.5, 10.2)
-        // 默认显示 owner 的关系网
-        const owner = this.data.owner;
-        
-        // 检查 owner 是否在这个时期
-        if (periodData.roster.includes(owner)) {
-            this.showPersonGraph(owner, periodId);
+        if (periodData.roster.includes(locked)) {
+            this.showPersonGraph(locked, periodId);
         } else {
-            // 如果 owner 不在此时期，显示提示信息
-            console.log('[App] Owner 未参与此时期:', periodId);
+            // 锁定人物不在此时期（理论上时间轴已过滤，不会到这）
             this.showNotParticipatedMessage(periodData);
         }
     }
@@ -1986,6 +2186,26 @@ class App {
             } else {
                 editPanel.style.display = 'none';
                 console.log('[App] 隐藏编辑面板');
+            }
+        }
+        
+        // 名字验证门控联动
+        // 进入 Owner 模式：重置 nameGate、隐藏验证面板、时间轴显示全部
+        // 退出 Owner 模式：恢复未验证态、显示验证面板、清空关系图
+        if (isOwner) {
+            this.nameGate.reset();
+            this.hideNameGatePanel();
+            if (this.timelineSelector) {
+                this.timelineSelector.render(null);
+            }
+        } else {
+            this.nameGate.reset();
+            this.showNameGatePanel();
+            const graphContainer = document.getElementById('graphContainer');
+            if (graphContainer) graphContainer.innerHTML = '';
+            // 时间轴恢复为未验证态（无按钮或全部按钮置灰）
+            if (this.timelineSelector) {
+                this.timelineSelector.render([]);
             }
         }
     }
@@ -2038,6 +2258,36 @@ class App {
     }
 
     /**
+     * 显示名字验证面板（隐藏关系图区域）
+     */
+    showNameGatePanel() {
+        const panel = document.getElementById('nameGatePanel');
+        if (panel) panel.style.display = 'block';
+        // 隐藏 graph-header 的控制栏（筛选器/图例）和关系图
+        const graphHeader = document.querySelector('.graph-header');
+        if (graphHeader) graphHeader.style.display = 'none';
+        const graphContainer = document.getElementById('graphContainer');
+        if (graphContainer) graphContainer.style.display = 'none';
+        // 时间轴区也隐藏（未验证时不让选时期）
+        const timelineSection = document.querySelector('.timeline-section');
+        if (timelineSection) timelineSection.style.display = 'none';
+    }
+
+    /**
+     * 隐藏名字验证面板（显示关系图区域）
+     */
+    hideNameGatePanel() {
+        const panel = document.getElementById('nameGatePanel');
+        if (panel) panel.style.display = 'none';
+        const graphHeader = document.querySelector('.graph-header');
+        if (graphHeader) graphHeader.style.display = '';
+        const graphContainer = document.getElementById('graphContainer');
+        if (graphContainer) graphContainer.style.display = '';
+        const timelineSection = document.querySelector('.timeline-section');
+        if (timelineSection) timelineSection.style.display = '';
+    }
+
+    /**
      * 显示未参与提示信息
      * @param {Object} periodData - 时期数据
      */
@@ -2045,12 +2295,18 @@ class App {
         const graphContainer = document.getElementById('graphContainer');
         if (!graphContainer) return;
         
+        // 非 Owner 模式下不暴露 owner 姓名
+        const isOwner = this.authManager.checkOwnerMode();
+        const displayName = isOwner
+            ? this.data.owner
+            : (this.nameGate.lockedName || '当前人物');
+        
         graphContainer.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666;">
                 <div style="text-align: center; max-width: 500px;">
                     <h3 style="color: #999; margin-bottom: 20px;">📋 ${periodData.name}</h3>
                     <p style="font-size: 16px; line-height: 1.6;">
-                        ${this.data.owner} 未参与此时期
+                        ${displayName} 未参与此时期
                     </p>
                     <p style="font-size: 14px; color: #999; margin-top: 10px;">
                         该时期共有 ${periodData.roster.length} 人，${periodData.relationshipCount} 段关系
@@ -2136,6 +2392,157 @@ class App {
             currentPerson: this.currentPerson,
             owner: this.data.owner
         };
+    }
+}
+
+// ============== 名字验证门控 ==============
+
+/**
+ * NameGate 类
+ * 职责：管理非 Owner 模式下的身份验证门控
+ * 功能：
+ * - 用户输入名字在 roster 并集中匹配
+ * - 每日 3 个不同名字的次数限制（按北京时间自然日重置，localStorage 存储）
+ * - 子图锁定状态管理（lockedName / unlockedAll）
+ * - Owner 名字 + 密码 all（SHA-256 哈希比较）解锁所有时期查看权限
+ * 错误匹配也计入次数；同名字重输不计数。
+ */
+class NameGate {
+    constructor(data) {
+        this.data = data;
+        this.lockedName = null;       // 当前锁定的名字（null = 未验证）
+        this.unlockedAll = false;     // Owner 密码通过后置 true，时间轴不限制
+        // sha256("all") 的值
+        this.nameHash = '5ef5ef0364b6939c4ca61f34b393f7b368d1be8619647aaf83d5b395919ab629';
+    }
+
+    /**
+     * 今日 localStorage key，按北京时间（UTC+8）自然日
+     * 跨天自动切换到新 key，旧 key 自然失效
+     */
+    getTodayKey() {
+        const now = new Date();
+        const beijing = new Date(now.getTime() + (now.getTimezoneOffset() + 480) * 60000);
+        const y = beijing.getFullYear();
+        const m = String(beijing.getMonth() + 1).padStart(2, '0');
+        const d = String(beijing.getDate()).padStart(2, '0');
+        return `nameGate_${y}-${m}-${d}`;
+    }
+
+    /**
+     * 读取今日已用名字数组
+     */
+    getUsedNames() {
+        try {
+            return JSON.parse(localStorage.getItem(this.getTodayKey()) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /**
+     * 写入今日已用名字（去重）
+     */
+    addUsedName(name) {
+        if (!name) return;
+        const arr = this.getUsedNames();
+        if (!arr.includes(name)) {
+            arr.push(name);
+            try {
+                localStorage.setItem(this.getTodayKey(), JSON.stringify(arr));
+            } catch (e) {}
+        }
+    }
+
+    /**
+     * 今日剩余可输入的新名字数
+     */
+    remainingCount() {
+        return Math.max(0, 3 - this.getUsedNames().length);
+    }
+
+    /**
+     * 是否允许输入该名字（同名重输不计数，第 4 个新名字被拒绝）
+     */
+    canAttempt(name) {
+        const used = this.getUsedNames();
+        if (used.includes(name)) return true;
+        return used.length < 3;
+    }
+
+    /**
+     * 在所有 period.roster 并集中精确匹配名字
+     */
+    findPerson(name) {
+        if (!name) return null;
+        for (const p of this.data.periods) {
+            if (p.roster.includes(name)) return name;
+        }
+        return null;
+    }
+
+    /**
+     * 该名字出现的所有时期 id 列表
+     */
+    findPeriodIds(name) {
+        if (!name) return [];
+        return this.data.periods
+            .filter(p => p.roster.includes(name))
+            .map(p => p.id);
+    }
+
+    /**
+     * 是否为 Owner（数据中的 data.owner 字段）
+     */
+    isWanglejiang(name) {
+        return name === this.data.owner;
+    }
+
+    /**
+     * 计算 SHA-256 哈希值（复用 AuthManager.sha256 实现思路）
+     */
+    async sha256(message) {
+        try {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (error) {
+            console.error('[NameGate] SHA-256 计算失败:', error);
+            throw new Error('哈希计算失败');
+        }
+    }
+
+    /**
+     * 验证 Owner 密码（哈希比较，不明文校验）
+     */
+    async verifyPassword(pwd) {
+        const h = await this.sha256(pwd);
+        return h === this.nameHash;
+    }
+
+    /**
+     * 锁定为指定名字（普通验证通过）
+     */
+    lockTo(name) {
+        this.lockedName = name;
+        this.unlockedAll = false;
+    }
+
+    /**
+     * 解锁所有时期查看（Owner 名字+密码通过）
+     */
+    unlockAll() {
+        this.lockedName = this.data.owner;
+        this.unlockedAll = true;
+    }
+
+    /**
+     * 重置为未验证态（Owner 进入 / 退出时调用）
+     */
+    reset() {
+        this.lockedName = null;
+        this.unlockedAll = false;
     }
 }
 
