@@ -1900,13 +1900,16 @@ class App {
             }
             // 普通名字匹配
             const found = this.nameGate.findPerson(name);
-            this.nameGate.addUsedName(name); // 计入次数（含失败）
-            updateCount();
             if (!found) {
+                // 失败才计入次数（正确输入不消耗）
+                this.nameGate.addUsedName(name);
+                updateCount();
                 showMessage(`未找到名为「${name}」的同学`, 'error');
                 nameInput.value = '';
                 return;
             }
+            // 成功匹配：不计入次数
+            updateCount();
             // 锁定并渲染
             this.nameGate.lockTo(found);
             this.hideNameGatePanel();
@@ -1928,15 +1931,17 @@ class App {
                 showMessage('请输入密码', 'error');
                 return;
             }
-            // Owner 名字+密码：计入次数
-            this.nameGate.addUsedName(this.data.owner);
-            updateCount();
             const ok = await this.nameGate.verifyPassword(pwd);
             if (!ok) {
+                // 密码错误才计入次数（正确密码不消耗）
+                this.nameGate.addUsedName(this.data.owner);
+                updateCount();
                 showMessage('密码错误', 'error');
                 pwdInput.value = '';
                 return;
             }
+            // 密码正确：不计入次数
+            updateCount();
             // 解锁 Owner 查看（所有时期可见，但仍非 Owner 模式）
             this.nameGate.unlockAll();
             this.hideNameGatePanel();
@@ -2157,7 +2162,9 @@ class App {
         if (graphTitle) {
             graphTitle.textContent = `${periodData.name} - ${locked}`;
         }
-        if (periodData.roster.includes(locked)) {
+        // locked 在该时期 roster 中，或在该时期 relationships 中存在，都渲染关系图
+        // （跨班人物可能不在 roster 但通过关系出现在该时期）
+        if (this.nameGate.hasPresenceInPeriod(locked, periodId)) {
             this.showPersonGraph(locked, periodId);
         } else {
             // 锁定人物不在此时期（理论上时间轴已过滤，不会到这）
@@ -2471,24 +2478,65 @@ class NameGate {
     }
 
     /**
-     * 在所有 period.roster 并集中精确匹配名字
+     * 在所有 period.roster 并集 + relationships 的 person1/person2 中精确匹配名字
+     * 跨班人物（如外部朋友）可能不在任何 roster 中，但出现在 relationships 数据里
      */
     findPerson(name) {
         if (!name) return null;
+        // 先在 roster 并集中查
         for (const p of this.data.periods) {
             if (p.roster.includes(name)) return name;
+        }
+        // 再在 relationships 的 person1/person2 中查
+        if (Array.isArray(this.data.relationships)) {
+            for (const rel of this.data.relationships) {
+                if (rel.person1 === name || rel.person2 === name) return name;
+            }
         }
         return null;
     }
 
     /**
      * 该名字出现的所有时期 id 列表
+     * 包含 roster 中含该名字的时期 + relationships 中含该名字的关系所在时期
      */
     findPeriodIds(name) {
         if (!name) return [];
+        const ids = new Set();
+        // roster 中包含该名字的时期
+        this.data.periods.forEach(p => {
+            if (p.roster.includes(name)) ids.add(p.id);
+        });
+        // relationships 中包含该名字的关系所在时期
+        if (Array.isArray(this.data.relationships)) {
+            this.data.relationships.forEach(rel => {
+                if (rel.person1 === name || rel.person2 === name) {
+                    ids.add(rel.period);
+                }
+            });
+        }
+        // 按 periods 的 order 排序，保证时间轴顺序稳定
         return this.data.periods
-            .filter(p => p.roster.includes(name))
+            .filter(p => ids.has(p.id))
+            .sort((a, b) => a.order - b.order)
             .map(p => p.id);
+    }
+
+    /**
+     * 该名字在指定时期是否有任何存在（roster 或 relationships）
+     * 用于 onPeriodChanged 判断是否应该渲染关系图（避免误显示"未参与"）
+     */
+    hasPresenceInPeriod(name, periodId) {
+        if (!name || !periodId) return false;
+        const period = this.data.periods.find(p => p.id === periodId);
+        if (period && period.roster.includes(name)) return true;
+        if (Array.isArray(this.data.relationships)) {
+            return this.data.relationships.some(rel =>
+                rel.period === periodId &&
+                (rel.person1 === name || rel.person2 === name)
+            );
+        }
+        return false;
     }
 
     /**
