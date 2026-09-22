@@ -1,6 +1,6 @@
 # 时间轴社交关系网络可视化系统
 
-展示王乐江在不同学习时期（小学到大学）的社交关系网络的可视化系统。
+展示不同学习时期（小学到大学）的社交关系网络的可视化系统。
 
 🌐 **在线访问**: [wanglejiang.online](https://wanglejiang.online)
 
@@ -79,21 +79,21 @@ php -S localhost:8000
 ```json
 {
   "version": "1.0.0",
-  "owner": "王乐江",
+  "owner": "站长",
   "periods": [
     {
       "id": "primary",
       "name": "小学",
       "order": 1,
       "participated": true,
-      "roster": ["王乐江", "张童伟", "原新文"]
+      "roster": ["人物1", "人物2", "人物3"]
     }
   ],
   "relationships": [
     {
       "id": "rel_001",
       "period": "primary",
-      "person1": "王乐江",
+      "person1": "人物1",
       "person2": "张童伟",
       "type": "friend",
       "note": ""
@@ -218,7 +218,7 @@ Owner 可以通过密码验证进入编辑模式来更新数据。
 
 ## 联系方式
 
-项目所有者：王乐江
+项目所有者：站长
 域名：wanglejiang.online
 
 ---
