@@ -10,7 +10,7 @@
   const cnIdx = { 一:1, 二:2, 三:3, 四:4, 五:5, 六:6, 七:7, 八:8, 九:9, 十:10 };
 
   /* ---------- 乐江AI 配置（走 Worker 代理，密钥不暴露） ---------- */
-  const AI_URL   = 'https://ai.wanglejiang.top';
+  const AI_URL   = 'https://lejiang-ai-proxy.2258221948.workers.dev';
   const AI_MODEL = 'agnes-2.5-flash';
   const AI_SYSTEM = '你是一位精通文言文与白话文对译的学者，译文准确流畅。';
 
