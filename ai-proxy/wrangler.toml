@@ -1,0 +1,13 @@
+# 乐江 AI 代理 Worker
+# 部署步骤：
+#   1. npm install -g wrangler
+#   2. wrangler login
+#   3. wrangler secret put AI_API_KEY  （粘贴密钥，不会进代码/git）
+#   4. wrangler deploy
+#   5. 把返回的 URL 填到前端的 AI_PROXY_URL
+
+name = "lejiang-ai-proxy"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+# AI_API_KEY 通过 wrangler secret put 设置，不会出现在代码或 git 中

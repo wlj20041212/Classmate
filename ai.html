@@ -269,10 +269,8 @@
 
 <script>
 // ===== 配置 =====
-// Base URL 以 /v1 结尾（官方要求），JS 里拼接 /chat/completions
-const BASE_URL = 'https://api.agnes-ai.cn/v1';
-const API_URL = BASE_URL + '/chat/completions';
-const API_KEY = 'sk-coiOt3YttnpJakJOLvsAhnt82ttTK8qq0TDOQaBwN38MULHj';
+// 走 Worker 代理，密钥不暴露在前端
+const AI_PROXY_URL = 'https://ai.wanglejiang.top';
 const MODEL   = 'agnes-2.5-flash';
 
 const messagesEl = document.getElementById('messages');
@@ -813,12 +811,11 @@ async function sendMessage() {
   history.push({ role: 'user', content: userMsg });
 
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(AI_PROXY_URL, {
       method: 'POST',
       mode: 'cors',
       credentials: 'omit',
       headers: {
-        'Authorization': 'Bearer ' + API_KEY,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },

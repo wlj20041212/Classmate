@@ -9,9 +9,8 @@
   const cnNums = ['零','一','二','三','四','五','六','七','八','九','十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
   const cnIdx = { 一:1, 二:2, 三:3, 四:4, 五:5, 六:6, 七:7, 八:8, 九:9, 十:10 };
 
-  /* ---------- 乐江AI 配置（与诗稿页同源，后台静默调用） ---------- */
-  const AI_URL   = 'https://api.agnes-ai.cn/v1/chat/completions';
-  const AI_KEY   = 'sk-coiOt3YttnpJakJOLvsAhnt82ttTK8qq0TDOQaBwN38MULHj';
+  /* ---------- 乐江AI 配置（走 Worker 代理，密钥不暴露） ---------- */
+  const AI_URL   = 'https://ai.wanglejiang.top';
   const AI_MODEL = 'agnes-2.5-flash';
   const AI_SYSTEM = '你是一位精通文言文与白话文对译的学者，译文准确流畅。';
 
@@ -244,7 +243,6 @@
         credentials: 'omit',
         signal: controller.signal,
         headers: {
-          'Authorization': 'Bearer ' + AI_KEY,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
