@@ -1815,13 +1815,10 @@ class App {
                     period_name: periodData ? periodData.name : periodId
                 });
             }
-            // Owner 模式：原行为（重新 buildGraphData 扩展）
-            // 非 Owner 模式：子图锁定，只重定中心不扩展
-            if (this.authManager.checkOwnerMode()) {
-                this.showPersonGraph(personId, periodId);
-            } else if (this.graphRenderer && this.graphRenderer.network) {
-                this.graphRenderer.recenter(personId);
-            }
+            // 不论 Owner 还是非 Owner 模式，点击节点都切换中心重建子图
+            // 非 Owner 模式下子图锁定的是"当前时期 + 当前锁定人物的关系网"，
+            // 新中心仍是该时期内的人物，重建后仍是该时期该人物的关系网（不跨期）
+            this.showPersonGraph(personId, periodId);
         });
         
         // 认证状态变更事件 (任务 7.2)
@@ -1847,7 +1844,50 @@ class App {
         // 名字验证门控事件绑定
         this.bindNameGateEvents();
         
+        // 切换用户按钮事件
+        this.bindSwitchUserEvent();
+        
         console.log('[App] 事件绑定完成');
+    }
+    
+    /**
+     * 绑定"切换用户"按钮事件：清空锁定状态，回到搜索页
+     */
+    bindSwitchUserEvent() {
+        const switchBtn = document.getElementById('switchUserBtn');
+        if (!switchBtn) return;
+        switchBtn.addEventListener('click', () => {
+            console.log('[App] 用户点击切换用户');
+            // 清空 nameGate 状态
+            this.nameGate.clearState();
+            // 清空 currentPerson / currentPeriod
+            this.currentPerson = null;
+            this.currentPeriod = null;
+            // 销毁关系图
+            if (this.graphRenderer && this.graphRenderer.network) {
+                this.graphRenderer.network.destroy();
+                this.graphRenderer.network = null;
+            }
+            // 显示搜索页
+            this.showNameGatePanel();
+            const graphContainer = document.getElementById('graphContainer');
+            if (graphContainer) graphContainer.innerHTML = '';
+            if (this.timelineSelector) {
+                this.timelineSelector.render([]);
+            }
+            // 清空输入框和密码框
+            const nameInput = document.getElementById('nameGateInput');
+            const pwdBox = document.getElementById('nameGatePwdBox');
+            const msg = document.getElementById('nameGateMsg');
+            const countEl = document.getElementById('nameGateCount');
+            if (nameInput) nameInput.value = '';
+            if (pwdBox) pwdBox.style.display = 'none';
+            const pwdInput = document.getElementById('nameGatePwd');
+            if (pwdInput) pwdInput.value = '';
+            if (msg) { msg.textContent = ''; msg.className = 'name-gate-msg'; }
+            // 更新剩余次数
+            if (countEl) countEl.textContent = `今日剩余 ${this.nameGate.remainingCount()} 次`;
+        });
     }
     
     /**
@@ -2197,22 +2237,28 @@ class App {
         }
         
         // 名字验证门控联动
-        // 进入 Owner 模式：重置 nameGate、隐藏验证面板、时间轴显示全部
-        // 退出 Owner 模式：恢复未验证态、显示验证面板、清空关系图
         if (isOwner) {
+            // 进入 Owner 模式：重置 nameGate、隐藏验证面板、时间轴显示全部
             this.nameGate.reset();
             this.hideNameGatePanel();
             if (this.timelineSelector) {
                 this.timelineSelector.render(null);
             }
         } else {
-            this.nameGate.reset();
-            this.showNameGatePanel();
-            const graphContainer = document.getElementById('graphContainer');
-            if (graphContainer) graphContainer.innerHTML = '';
-            // 时间轴恢复为未验证态（无按钮或全部按钮置灰）
-            if (this.timelineSelector) {
-                this.timelineSelector.render([]);
+            // 退出 Owner 模式：尝试从 sessionStorage 恢复锁定状态
+            const restored = this.nameGate.loadState();
+            if (restored && this.nameGate.lockedName) {
+                // 有锁定状态：跳过搜索页，但具体的时期渲染交给 showDefaultPeriod 处理
+                // （此时 bindEvents 还未执行，timelineController 的回调未注册）
+                this.hideNameGatePanel();
+            } else {
+                // 无锁定状态：显示搜索页
+                this.showNameGatePanel();
+                const graphContainer = document.getElementById('graphContainer');
+                if (graphContainer) graphContainer.innerHTML = '';
+                if (this.timelineSelector) {
+                    this.timelineSelector.render([]);
+                }
             }
         }
     }
@@ -2249,14 +2295,34 @@ class App {
      * 显示默认时期 (任务 5.3 - 需求 1.5, 10.2)
      */
     showDefaultPeriod() {
-        console.log('[App] 显示默认时期（第一个时期）');
+        console.log('[App] 显示默认时期');
         
+        // 非 Owner 模式下，如果有锁定状态，切到锁定人物所在时期
+        if (!this.authManager.checkOwnerMode() && this.nameGate.lockedName) {
+            if (this.nameGate.unlockedAll) {
+                // 王乐江解锁：所有时期都可见，切到第一个
+                this.timelineSelector.render(null);
+                const allPeriods = this.timelineController.getAllPeriods();
+                if (allPeriods.length > 0) {
+                    console.log('[App] 恢复王乐江解锁状态，选择第一个时期:', allPeriods[0].name);
+                    this.timelineSelector.selectPeriod(allPeriods[0].id);
+                }
+                return;
+            }
+            const periodIds = this.nameGate.findPeriodIds(this.nameGate.lockedName);
+            if (periodIds.length > 0) {
+                this.timelineSelector.render(periodIds);
+                console.log('[App] 恢复锁定状态，选择时期:', periodIds[0]);
+                this.timelineSelector.selectPeriod(periodIds[0]);
+                return;
+            }
+        }
+        
+        // 默认：选择第一个时期
         const periods = this.timelineController.getAllPeriods();
         if (periods.length > 0) {
             const firstPeriod = periods[0];
             console.log('[App] 选择第一个时期:', firstPeriod.name);
-            
-            // 选择第一个时期
             this.timelineSelector.selectPeriod(firstPeriod.id);
         } else {
             console.error('[App] 没有可用的时期');
@@ -2278,6 +2344,9 @@ class App {
         // 时间轴区也隐藏（未验证时不让选时期）
         const timelineSection = document.querySelector('.timeline-section');
         if (timelineSection) timelineSection.style.display = 'none';
+        // 隐藏"切换用户"按钮（已经在搜索页了）
+        const switchBtn = document.getElementById('switchUserBtn');
+        if (switchBtn) switchBtn.style.display = 'none';
     }
 
     /**
@@ -2292,6 +2361,9 @@ class App {
         if (graphContainer) graphContainer.style.display = '';
         const timelineSection = document.querySelector('.timeline-section');
         if (timelineSection) timelineSection.style.display = '';
+        // 显示"切换用户"按钮（已验证，可切换）
+        const switchBtn = document.getElementById('switchUserBtn');
+        if (switchBtn) switchBtn.style.display = '';
     }
 
     /**
@@ -2575,6 +2647,7 @@ class NameGate {
     lockTo(name) {
         this.lockedName = name;
         this.unlockedAll = false;
+        this.persistState();
     }
 
     /**
@@ -2583,6 +2656,7 @@ class NameGate {
     unlockAll() {
         this.lockedName = this.data.owner;
         this.unlockedAll = true;
+        this.persistState();
     }
 
     /**
@@ -2591,6 +2665,52 @@ class NameGate {
     reset() {
         this.lockedName = null;
         this.unlockedAll = false;
+        this.persistState();
+    }
+
+    /**
+     * 持久化锁定状态到 sessionStorage（页面刷新后能恢复）
+     * Owner 模式不持久化（Owner 模式有自己的 sessionStorage 状态）
+     */
+    persistState() {
+        try {
+            if (this.lockedName) {
+                sessionStorage.setItem('nameGateLocked', this.lockedName);
+                sessionStorage.setItem('nameGateUnlockedAll', this.unlockedAll ? '1' : '0');
+            } else {
+                sessionStorage.removeItem('nameGateLocked');
+                sessionStorage.removeItem('nameGateUnlockedAll');
+            }
+        } catch (e) {}
+    }
+
+    /**
+     * 从 sessionStorage 恢复锁定状态（页面加载时调用）
+     * @returns {boolean} 是否恢复成功
+     */
+    loadState() {
+        try {
+            const locked = sessionStorage.getItem('nameGateLocked');
+            if (!locked) return false;
+            const unlockedAll = sessionStorage.getItem('nameGateUnlockedAll') === '1';
+            this.lockedName = locked;
+            this.unlockedAll = unlockedAll;
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * 清除持久化状态（用户点"切换用户"按钮时调用）
+     */
+    clearState() {
+        this.lockedName = null;
+        this.unlockedAll = false;
+        try {
+            sessionStorage.removeItem('nameGateLocked');
+            sessionStorage.removeItem('nameGateUnlockedAll');
+        } catch (e) {}
     }
 }
 

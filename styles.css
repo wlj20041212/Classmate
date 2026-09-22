@@ -1090,3 +1090,22 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
     .name-gate-panel { margin: 20px 12px; padding: 24px 16px; }
     .name-gate-row input { max-width: 180px; }
 }
+
+/* ===== 切换用户按钮 ===== */
+.switch-user-btn {
+    margin-left: 12px;
+    padding: 8px 16px;
+    background: #fff;
+    color: #1976d2;
+    border: 1px solid #1976d2;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.switch-user-btn:hover {
+    background: #1976d2;
+    color: #fff;
+}
